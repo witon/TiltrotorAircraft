@@ -102,7 +102,7 @@ flowchart LR
 - **垂起 → 固飞**：形态开关切固飞 → 进入 `STABILIZE` 或 `MANUAL` → 前飞过渡；倾转由垂直工作区大行程扫向水平工作区（见 [hardware.md](./hardware.md) 倾转端点语义）。
 - **固飞 → 垂起**：形态开关切垂起 → 进入 `QSTABILIZE` → 后飞/悬停过渡。
 
-倾转与各轴控制的设计意图、实机形态 / 差动滚转图示、以及 stock BiCopter 固飞差动副翼缺口，见 [hardware.md](./hardware.md)；本文只定模式与开关体系。
+倾转与各轴控制的设计意图、实机形态 / 差动滚转图示、以及固飞 Lua 差动倾转约定，见 [hardware.md](./hardware.md)；刷参与脚本部署见 [ardupilot-setup.md](./ardupilot-setup.md)。本文只定模式与开关体系。
 
 ## 安全要点
 
