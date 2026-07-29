@@ -98,7 +98,9 @@ H743-MINI **V3** 侧面焊盘为 S1–S8、S11、S12（**无 S9/S10**）。本�
 | 接收机 | RadioMaster ER6GV（V = Vario 气压计，非陀螺） |
 | 接收机 → 飞控 | CRSF（`RX6` / `TX6`） |
 | 通道顺序 | 建议 AETR |
-| 模式开关 | 默认 RC CH8（`FLTMODE_CH=8`） |
+| 飞行模式通道 | 默认 RC CH8（`FLTMODE_CH=8`）；为遥控器混控后的合成通道 |
+
+遥控器用**形态开关**与**固飞模式开关**两路，经混控合成到 CH8；垂起仅 `QSTABILIZE`，固飞为 `STABILIZE` / `MANUAL`。开关语义与真值表见 [flight-modes.md](./flight-modes.md)。
 
 ELRS 要求遥控器 **CH5 为 Arm**（射频侧）；与飞控 `ARMING` 通道可分开理解。
 
