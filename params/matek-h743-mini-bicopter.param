@@ -1,5 +1,5 @@
 # Matek H743-MINI V3 — TiltrotorAircraft BiCopter (ArduPlane)
-# Import via Mission Planner / QGC, then reboot.
+# Upload 01-q-enable.param first, reboot, then this file (MP or upload-params.py).
 # Calibrate SERVO5/6 MIN/TRIM/MAX and BTILT_* on the bench (props off).
 # See docs/ardupilot-setup.md
 

@@ -2,20 +2,43 @@
 
 本机：Matek **H743-MINI V3** + 官方 **ArduPlane**（BiCopter）+ Lua 固飞等效副翼。硬件与接线见 [hardware.md](./hardware.md)，模式见 [flight-modes.md](./flight-modes.md)。
 
-**不需要**自编译固件。
+**不需要**自编译固件。首次 DFU / 本地固件下载见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)。
 
 ## 1. 刷官方固件
 
-1. Mission Planner → **Initial Setup** → **Install Firmware**，选 **MatekH743**（或板型列表中的 H743-MINI 对应项）→ **Plane**。
-2. 确认固件含 **Scripting**（近年官方 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
-3. 刷写完成后连接飞控，不要急着装桨。
+推荐按 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md) 操作（本地下载 + 首次 DFU）。摘要：
+
+1. 下载固件：
+   ```powershell
+   .\scripts\download-matekh743-plane.ps1
+   ```
+2. **首次**：按住 Boot，用 STM32CubeProgrammer（或 dfu-util）烧写 `firmware/Plane/stable/MatekH743/arduplane_with_bl.hex`。
+3. **已装 ArduPilot 后升级**：Mission Planner → **Install Firmware** → Load custom firmware → `arduplane.apj`；或在线选 **MatekH743** → **Plane**。
+4. 确认固件含 **Scripting**（近年官方 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
+5. 刷写完成后连接飞控（115200），不要急着装桨。验证清单：[flash-verify-checklist.md](./flash-verify-checklist.md)。
 
 ## 2. 导入参数
 
-1. 打开仓库中的 [`params/matek-h743-mini-bicopter.param`](../params/matek-h743-mini-bicopter.param)。
-2. Mission Planner → **Config/Tuning** → **Full Parameter List** → **Load from file** → 写入飞控。
-3. **重启**飞控（`AHRS_ORIENTATION`、`BRD_ALT_CONFIG`、`SERIAL7_*`、`Q_*` 均需重启生效）。
-4. 按 [hardware.md](./hardware.md) 完成 Accel **水平校准**（竖装 Roll90 后必做）。
+未先开 `Q_ENABLE` 时，`Q_TILT_*` 等参数不在飞控表中。须先写 [`params/01-q-enable.param`](../params/01-q-enable.param) 并**重启**，再写主参数 [`params/matek-h743-mini-bicopter.param`](../params/matek-h743-mini-bicopter.param)。
+
+### 2.1 Mission Planner（GUI）
+
+1. Full Parameter List → **Load from file** → `01-q-enable.param` → Write → **重启** → Refresh。
+2. 再 Load → `matek-h743-mini-bicopter.param` → Write → **重启**。
+3. 按 [hardware.md](./hardware.md) 完成 Accel **水平校准**（竖装 Roll90 后必做）。
+
+### 2.2 CLI（`upload-params.py`）
+
+先在 Mission Planner 中 **Disconnect**（串口不能被占用），然后：
+
+```powershell
+pip install -r requirements.txt
+python scripts/upload-params.py --port COMx --param-file params/01-q-enable.param
+# 等重启约 10s
+python scripts/upload-params.py --port COMx --param-file params/matek-h743-mini-bicopter.param
+```
+
+默认波特率 115200；`--no-reboot` 可跳过写完后的重启命令。
 
 ### 参数摘要
 
@@ -97,10 +120,12 @@
 
 ```mermaid
 flowchart LR
-  flash[刷官方Plane]
-  param[导入param重启]
+  download[下载固件]
+  flash[DFU或MP刷写]
+  qenable[Q_ENABLE重启]
+  param[导入主param重启]
   lua[复制脚本到SD]
   calib[台架标定]
   stick[固飞横滚差动确认]
-  flash --> param --> lua --> calib --> stick
+  download --> flash --> qenable --> param --> lua --> calib --> stick
 ```

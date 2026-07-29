@@ -75,7 +75,7 @@ stock 在非 VTOL 且已前倾到位（`fully_fwd`）时，左右倾转被锁在
 
 #### 本机落地约定（Lua 固飞差动）
 
-垂起 / 过渡仍用官方 BiCopter；固飞横滚由 [`scripts/bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 在 `STABILIZE` / `MANUAL` 下覆写 S5/S6。参数与刷写见 [ardupilot-setup.md](./ardupilot-setup.md)。
+垂起 / 过渡仍用官方 BiCopter；固飞横滚由 [`scripts/bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 在 `STABILIZE` / `MANUAL` 下覆写 S5/S6。固件刷写见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)；参数与标定见 [ardupilot-setup.md](./ardupilot-setup.md)。
 
 | 项目 | 本机约定 |
 |------|----------|
