@@ -24,7 +24,7 @@
 
 虽无独立副翼 / 方向舵面，设计上由倾转机构与双电机分别承担对应职能：
 
-- **横滚（等效副翼）**：固飞时左右外段相对水平差动倾转 → 左右迎角差 → 滚转力矩（设计意图；见下文与 stock 的差异）
+- **横滚（等效副翼）**：固飞时左右外段相对水平差动倾转 → 左右迎角差 → 滚转力矩（由 Lua 脚本覆写倾转 PWM；见下文）
 - **偏航（等效方向舵）**：左右电机差动推力
 - **俯仰**：平尾升降舵
 
@@ -61,7 +61,7 @@
 | 垂起 | 垂直 | 相对垂直前后矢量（偏航等） |
 | 转换 | 水平 ↔ 垂直渐变 | 大行程扫过；非稳态小行程 |
 
-#### 官方 BiCopter 绝对端点
+#### 官方 BiCopter 绝对端点（stock）
 
 ArduPlane stock BiCopter（`Q_TILT_TYPE=3`）用 `SERVOn_MIN` / `TRIM` / `MAX` 标定**全行程**端点：
 
@@ -71,14 +71,27 @@ ArduPlane stock BiCopter（`Q_TILT_TYPE=3`）用 `SERVOn_MIN` / `TRIM` / `MAX` �
 | TRIM | 垂直（垂起中心） |
 | MAX | 垂直后再仰（垂起偏航极限） |
 
-占位 PWM 常为 MIN=1000、TRIM=1500、MAX=2000，须按机械行程台架标定。垂起侧相对垂直的前/后偏角由 `Q_TILT_YAW_ANGLE` 限制，与 MAX 配套。
+stock 在非 VTOL 且已前倾到位（`fully_fwd`）时，左右倾转被锁在 `-SERVO_MAX`（即 MIN），**无**固飞差动副翼。且 **MIN = 水平** 时 PWM 无法越过水平再向下。
 
-该表是 stock 全行程标定约定，**不是**上表「形态内工作区」。关键矛盾：
+#### 本机落地约定（Lua 固飞差动）
 
-- **MIN = 水平 ⇒ PWM 无法越过水平再向下**，与「以水平为中心、上下双向副翼」不兼容。
-- stock 在非 VTOL 且已前倾到位（`fully_fwd`）时，左右倾转被锁在 `-SERVO_MAX`（即 MIN / 水平），**无**固飞差动副翼。
+垂起 / 过渡仍用官方 BiCopter；固飞横滚由 [`scripts/bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 在 `STABILIZE` / `MANUAL` 下覆写 S5/S6。固件刷写见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)；参数与标定见 [ardupilot-setup.md](./ardupilot-setup.md)。
 
-本机设计需要的「水平为中心 ± 小行程」超出上述官方映射；落地需改标定模型或改固件（另开任务）。本文只记录设计意图与 stock 差异，不把 MIN/TRIM/MAX 当作已覆盖该能力。
+| 项目 | 本机约定 |
+|------|----------|
+| `SERVO5/6_MIN` | 机械上「水平以下」极限（减迎角极限） |
+| `BTILT_HORIZ`（脚本） | 真水平 / 固飞中心（介于 MIN 与 TRIM） |
+| `SERVO5/6_TRIM` | 垂直（垂起中心；固件 VTOL 用） |
+| `SERVO5/6_MAX` | 垂直后再仰（与 `Q_TILT_YAW_ANGLE` 配套） |
+| 脚本失效 / 覆写超时 | 固件锁到 MIN（双侧略低于水平） |
+
+占位示例：MIN≈1100、`BTILT_HORIZ`≈1200、TRIM≈1500、MAX≈2000（须台架标定）。将 MIN 尽量靠近水平，并用 `BTILT_TRAVEL` 限制单侧差动行程。过渡末期固件可能短暂指向 MIN；进入固飞模式后脚本应尽快拉回 `BTILT_HORIZ`。
+
+| 对照 | stock | 本机 |
+|------|-------|------|
+| 固飞倾转 | 锁水平，无差动 | Lua 绕 `BTILT_HORIZ` 差动 |
+| MIN 语义 | 水平 | 水平以下极限 |
+| 是否改固件 | — | 否（官方 Plane + Scripting） |
 
 ## 飞控安装朝向
 
@@ -224,6 +237,8 @@ flowchart LR
 - [ ] Mission Planner 有 RC 输入；可选确认 CRSF 遥测
 - [ ] 仅一路 BEC 5V；舵机轨与接收机、飞控信号地共地
 - [ ] S5 / S6 / S7 / S11 / S12 与功能 75 / 76 / 19 / 73 / 74 一致
+- [ ] `SCR_ENABLE=1`；SD 卡 `APM/scripts/bicopter_fw_tilt_aileron.lua` 已部署；GCS 可见 `BTILT_*`
+- [ ] 固飞模式台架：横滚杆 → 左右倾转差动；垂起模式倾转不受脚本干扰
 
 ## 未记录规格
 

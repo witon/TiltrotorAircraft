@@ -1,0 +1,71 @@
+# Matek H743-MINI V3 — TiltrotorAircraft BiCopter (ArduPlane)
+# Incremental: upload this alone (Q_* must already exist).
+# Full: upload init.param first, reboot, then this file (MP or upload-params.py --mode full).
+# Calibrate SERVO5/6 MIN/TRIM/MAX and BTILT_* on the bench (props off).
+# See docs/ardupilot-setup.md
+
+# --- QuadPlane / BiCopter ---
+Q_ENABLE,1
+Q_TILT_ENABLE,1
+Q_FRAME_CLASS,10
+Q_TILT_TYPE,3
+Q_TILT_MASK,3
+Q_TILT_YAW_ANGLE,15
+
+# --- AHRS mount (cabin vertical, USB up, arrow forward = Roll90) ---
+AHRS_ORIENTATION,16
+
+# --- CRSF on SERIAL7 (RX6/TX6), MatekH743 ---
+BRD_ALT_CONFIG,1
+SERIAL7_PROTOCOL,23
+SERIAL7_OPTIONS,0
+
+# --- Scripting (FW differential tilt Lua) ---
+SCR_ENABLE,1
+
+# --- Flight modes on CH8 (EdgeTX mix: morph + FW mode switches) ---
+FLTMODE_CH,8
+FLTMODE1,17
+FLTMODE2,2
+FLTMODE3,0
+FLTMODE4,17
+FLTMODE5,2
+FLTMODE6,0
+
+# --- Servo outputs (H743-MINI V3 side pads S5–S8, S11–S12) ---
+# S5 tilt left — MIN below level, TRIM vertical, MAX past-vertical yaw
+SERVO5_FUNCTION,75
+SERVO5_MIN,1100
+SERVO5_TRIM,1500
+SERVO5_MAX,2000
+SERVO5_REVERSED,0
+
+# S6 tilt right
+SERVO6_FUNCTION,76
+SERVO6_MIN,1100
+SERVO6_TRIM,1500
+SERVO6_MAX,2000
+SERVO6_REVERSED,0
+
+# S7 elevator
+SERVO7_FUNCTION,19
+SERVO7_MIN,1000
+SERVO7_TRIM,1500
+SERVO7_MAX,2000
+SERVO7_REVERSED,0
+
+# S11 / S12 motors (PWM ESC; do not put ESC on S5–S8)
+SERVO11_FUNCTION,73
+SERVO11_MIN,1000
+SERVO11_TRIM,1000
+SERVO11_MAX,2000
+SERVO11_REVERSED,0
+
+SERVO12_FUNCTION,74
+SERVO12_MIN,1000
+SERVO12_TRIM,1000
+SERVO12_MAX,2000
+SERVO12_REVERSED,0
+
+# Unused side pads: leave disabled
+SERVO8_FUNCTION,0
