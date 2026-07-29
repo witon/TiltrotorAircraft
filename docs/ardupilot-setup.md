@@ -19,13 +19,24 @@
 
 ## 2. 导入参数
 
-未先开 `Q_ENABLE` 时，`Q_TILT_*` 等参数不在飞控表中。须先写 [`params/01-q-enable.param`](../params/01-q-enable.param) 并**重启**，再写主参数 [`params/matek-h743-mini-bicopter.param`](../params/matek-h743-mini-bicopter.param)。
+两种上传方式：
+
+| 模式 | 用途 | 顺序 |
+|------|------|------|
+| **全量** | 新板 / 需可复现基线 | [`init.param`](../params/init.param)（默认快照且 `Q_ENABLE=1`）→ **重启**（`Q_*` 出现）→ [`matek-h743-mini-bicopter.param`](../params/matek-h743-mini-bicopter.param) → 重启 |
+| **增量** | 已配置过、只改项目差异 | 仅写项目配置（飞控上须已有 `Q_*`） |
+
+`init.param` 来自恢复默认后的导出，并把 `Q_ENABLE` 置为 1，因此全量不再需要单独的 q-enable 文件。已用官方 Plane 参数元数据去掉 `Volatile` / `ReadOnly` / `Calibration` 项（见 [`init.param.removed.txt`](../params/init.param.removed.txt)；重跑：`python scripts/filter-init-params.py`）。未开 `Q_ENABLE` 时 `Q_TILT_*` 不在参数表中，故全量必须在 init 之后重启再写项目配置。
 
 ### 2.1 Mission Planner（GUI）
 
-1. Full Parameter List → **Load from file** → `01-q-enable.param` → Write → **重启** → Refresh。
+**全量：**
+
+1. Full Parameter List → **Load from file** → `init.param` → Write → **重启** → Refresh。
 2. 再 Load → `matek-h743-mini-bicopter.param` → Write → **重启**。
 3. 按 [hardware.md](./hardware.md) 完成 Accel **水平校准**（竖装 Roll90 后必做）。
+
+**增量：** 只做第 2 步（并确认 `Q_*` 已存在）。
 
 ### 2.2 CLI（`upload-params.py`）
 
@@ -33,12 +44,13 @@
 
 ```powershell
 pip install -r requirements.txt
-python scripts/upload-params.py --port COMx --param-file params/01-q-enable.param
-# 等重启约 10s
-python scripts/upload-params.py --port COMx --param-file params/matek-h743-mini-bicopter.param
+# 全量（脚本内会在 init 后自动重启并等待，再写项目配置）
+python scripts/upload-params.py --port COMx --mode full
+# 增量
+python scripts/upload-params.py --port COMx --mode incremental
 ```
 
-默认波特率 115200；`--no-reboot` 可跳过写完后的重启命令。
+默认波特率 115200；`--no-reboot` 可跳过**最终**重启（全量中间的 init 后重启仍会执行）。
 
 ### 参数摘要
 
@@ -122,10 +134,11 @@ python scripts/upload-params.py --port COMx --param-file params/matek-h743-mini-
 flowchart LR
   download[下载固件]
   flash[DFU或MP刷写]
-  qenable[Q_ENABLE重启]
-  param[导入主param重启]
+  init[全量init含Q_ENABLE]
+  reboot1[重启]
+  param[导入项目param重启]
   lua[复制脚本到SD]
   calib[台架标定]
   stick[固飞横滚差动确认]
-  download --> flash --> qenable --> param --> lua --> calib --> stick
+  download --> flash --> init --> reboot1 --> param --> lua --> calib --> stick
 ```
