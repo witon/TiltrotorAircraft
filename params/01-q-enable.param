@@ -1,3 +1,0 @@
-# Enable QuadPlane so Q_* / Q_TILT_* params appear after reboot.
-# Upload this first, wait for reboot, then upload matek-h743-mini-bicopter.param.
-Q_ENABLE,1
