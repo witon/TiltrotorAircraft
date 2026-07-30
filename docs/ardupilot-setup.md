@@ -63,7 +63,7 @@ python scripts/upload-params.py --port COMx --mode incremental
 | 模式 | `FLTMODE_CH=8`；`FLTMODE1=17`，`2=2`，`3=0`（其余垫档） |
 | 输出 | S5=75，S6=76，S7=19，S11=73，S12=74 |
 
-`Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写。勿照搬 H743-WING 的 `BATT_*`。
+`Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写。本项目不做电池监测标定与罗盘校准。
 
 ## 3. 部署 Lua 脚本
 
@@ -83,6 +83,37 @@ python scripts/upload-params.py --port COMx --mode incremental
 脚本仅在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转；**`QSTABILIZE`** 不覆写。
 
 ## 4. 台架标定（拆桨）
+
+### 需标定参数一览
+
+项目 param 中倾转 / `BTILT_*` / 升降舵端点为占位，须台架改写后再飞。悬停 PID、过渡速率等保持默认，试飞后再调（见 §6）。
+
+**地面（台架前）：**
+
+| 项 | 相关参数 | 说明 |
+|----|----------|------|
+| 加速度计水平校准 | `INS_ACC*` 等（MP 向导） | 设好 `AHRS_ORIENTATION=16` 并重启后必做；HUD 与机身一致 |
+| 遥控行程校准 | `RCn_MIN` / `TRIM` / `MAX` | 链路通后按实际杆量校准；CH8 与模式档对齐 |
+
+**台架（拆桨）：**
+
+| 参数 | 占位默认 | 标定目标 |
+|------|----------|----------|
+| `SERVO5_MIN` / `SERVO6_MIN` | 1100 | 机械「水平以下」极限；尽量靠近水平 |
+| `SERVO5_TRIM` / `SERVO6_TRIM` | 1500 | 垂直（垂起中心） |
+| `SERVO5_MAX` / `SERVO6_MAX` | 2000 | 垂直后再仰极限 |
+| `SERVO5_REVERSED` / `SERVO6_REVERSED` | 0 | 左右外段同向、垂起时电机轴朝上 |
+| `Q_TILT_YAW_ANGLE` | 15 | 与 MAX 对应的后仰角（度）一致 |
+| `BTILT_HORIZ` | 1200 | 固飞杆回中：外段与中段齐平（介于 MIN 与 TRIM） |
+| `BTILT_REV` | 1 | 左滚 → 左减迎角、右增迎角；反了改为 `-1` |
+| `BTILT_TRAVEL` | 100 | 满杆相对 HORIZ 的单侧最大偏置（µs） |
+| `BTILT_GAIN` | 0.3 | 差动增益 0..1；由低到高试 |
+| `SERVO7_MIN` / `TRIM` / `MAX` | 1000 / 1500 / 2000 | 平尾行程端点与中立 |
+| `SERVO7_REVERSED` | 0 | 固飞俯仰方向正确 |
+| `SERVO11_REVERSED` / `SERVO12_REVERSED` | 0 | 对转方向按机身要求 |
+| `SERVO11/12_MIN` / `TRIM` / `MAX` | 1000 / 1000 / 2000 | 一般可沿用；电调校准区不同再微调 |
+
+操作步骤见下文 4.1–4.3。端点语义见 [hardware.md](./hardware.md)。
 
 ### 4.1 倾转方向与 VTOL 端点
 
