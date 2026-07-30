@@ -12,6 +12,7 @@ Q_TILT_TYPE,3
 Q_TILT_MASK,3
 Q_TILT_YAW_ANGLE,15
 Q_ASSIST_SPEED,-1
+SCHED_LOOP_RATE,300
 
 # --- AHRS mount (cabin vertical, USB up, arrow forward = Roll90) ---
 AHRS_ORIENTATION,16

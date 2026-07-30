@@ -56,7 +56,7 @@ python scripts/upload-params.py --port COMx --mode incremental
 
 | 类别 | 关键项 |
 |------|--------|
-| 机架 | `Q_ENABLE=1`，`Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`，`Q_TILT_MASK=3`，`Q_ASSIST_SPEED=-1`（关闭固飞空速辅助；有空速计且需要辅助时再改为略高于失速的正值） |
+| 机架 | `Q_ENABLE=1`，`Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`，`Q_TILT_MASK=3`，`Q_ASSIST_SPEED=-1`（关闭固飞空速辅助；有空速计且需要辅助时再改为略高于失速的正值），`SCHED_LOOP_RATE=300`（QuadPlane 要求 ≥100） |
 | 姿态 | `AHRS_ORIENTATION=16` |
 | CRSF | `BRD_ALT_CONFIG=1`，`SERIAL7_PROTOCOL=23` |
 | 脚本 | `SCR_ENABLE=1` |
