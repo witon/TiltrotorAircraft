@@ -62,8 +62,11 @@ python scripts/upload-params.py --port COMx --mode incremental
 | 脚本 | `SCR_ENABLE=1` |
 | 模式 | `FLTMODE_CH=8`；`FLTMODE1=17`，`2=2`，`3=0`（其余垫档） |
 | 输出 | S5=75，S6=76，S7=19，S11=73，S12=74 |
+| 无 GPS/罗盘 | `COMPASS_ENABLE=0`，`GPS1_TYPE=0`，`AHRS_GPS_USE=0`，`EK3_SRC1_POSXY/VELXY/VELZ/YAW=0`，`ARMING_CHECK=1048562`（Plane 4.6：启用除 Compass/GPS 外的解锁检查；4.7+ 可改为 `ARMING_SKIPCHK=12`） |
 
 `Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写。本项目不做电池监测标定与罗盘校准。
+
+H743-MINI 无内置罗盘；项目默认按**姿态模式**运行（无外置 GPS/罗盘），可解锁台架与 `QSTABILIZE` / `STABILIZE` / `MANUAL`。勿使用需定位的模式（`AUTO` / `RTL` / `QLOITER` / `QRTL` 等）；无罗盘时偏航会漂，垂起偏航保持较差。日后外接 GPS+罗盘时：恢复 `GPS1_TYPE`、打开罗盘、还原 `EK3_SRC1_*`（水平位置/速度用 GPS，航向用罗盘）、`ARMING_CHECK=1`（或 4.7+ 的 `ARMING_SKIPCHK=0`），并完成罗盘校准与 GPS 定位后再飞自主模式。
 
 ## 3. 部署 Lua 脚本
 

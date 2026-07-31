@@ -71,3 +71,16 @@ SERVO12_REVERSED,0
 
 # Unused side pads: leave disabled
 SERVO8_FUNCTION,0
+
+# --- Attitude-only: no external GPS/compass (H743-MINI has none onboard) ---
+# Allows arming QSTABILIZE / STABILIZE / MANUAL without home/GPS/compass.
+# Do not use position modes (AUTO/RTL/QLOITER/QRTL). Restore GPS+compass later if needed.
+# Plane 4.6: ARMING_CHECK bitmask (all checks except Compass+GPS). Plane 4.7+: use ARMING_SKIPCHK=12 instead.
+COMPASS_ENABLE,0
+GPS1_TYPE,0
+AHRS_GPS_USE,0
+EK3_SRC1_POSXY,0
+EK3_SRC1_VELXY,0
+EK3_SRC1_VELZ,0
+EK3_SRC1_YAW,0
+ARMING_CHECK,1048562
