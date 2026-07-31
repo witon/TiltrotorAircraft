@@ -124,6 +124,8 @@ H743-MINI **V3** 侧面焊盘为 S1–S8、S11、S12（**无 S9/S10**）。本�
 | S11 | 73（ThrottleLeft） | 左电机 ESC 信号 |
 | S12 | 74（ThrottleRight） | 右电机 ESC 信号 |
 
+固飞（`STABILIZE` / `MANUAL`）下推力由 [`bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 覆写 73/74（`BTILT_THR=1`），不依赖 stock 双发混控；垂起仍由固件电机库驱动。见 [ardupilot-setup.md](./ardupilot-setup.md) §3。
+
 约束：
 
 - 倾转 S5/S6 同定时器组；电机须用 S11/S12 单独一组。
@@ -237,8 +239,8 @@ flowchart LR
 - [ ] Mission Planner 有 RC 输入；可选确认 CRSF 遥测
 - [ ] 仅一路 BEC 5V；舵机轨与接收机、飞控信号地共地
 - [ ] S5 / S6 / S7 / S11 / S12 与功能 75 / 76 / 19 / 73 / 74 一致
-- [ ] `SCR_ENABLE=1`；SD 卡 `APM/scripts/bicopter_fw_tilt_aileron.lua` 已部署；GCS 可见 `BTILT_*`
-- [ ] 固飞模式台架：横滚杆 → 左右倾转差动；垂起模式倾转不受脚本干扰
+- [ ] `SCR_ENABLE=1`；SD 卡 `APM/scripts/bicopter_fw_tilt_aileron.lua` 已部署；GCS 可见 `BTILT_*`（含 `BTILT_THR`）
+- [ ] 固飞模式台架：横滚杆 → 左右倾转差动；推油门 → S11/S12 PWM 上升；垂起模式倾转/油门不受脚本干扰
 
 ## 未记录规格
 

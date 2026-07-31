@@ -1,6 +1,6 @@
-# ArduPilot 设置（BiCopter + Lua 固飞差动）
+# ArduPilot 设置（BiCopter + Lua 固飞差动 / 油门）
 
-本机：Matek **H743-MINI V3** + 官方 **ArduPlane**（BiCopter）+ Lua 固飞等效副翼。硬件与接线见 [hardware.md](./hardware.md)，模式见 [flight-modes.md](./flight-modes.md)。
+本机：Matek **H743-MINI V3** + 官方 **ArduPlane**（BiCopter）+ Lua 固飞等效副翼与固飞油门直通。硬件与接线见 [hardware.md](./hardware.md)，模式见 [flight-modes.md](./flight-modes.md)。
 
 **不需要**自编译固件。首次 DFU / 本地固件下载见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)。
 
@@ -71,19 +71,36 @@ H743-MINI 无内置罗盘；项目默认按**姿态模式**运行（无外置 GP
 ## 3. 部署 Lua 脚本
 
 1. 飞控插入 MicroSD，目录：`APM/scripts/`（若无则新建）。
-2. 复制 [`scripts/bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 到该目录。
+2. 复制 [`scripts/bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 到该目录（覆盖旧版）。
 3. 确认 `SCR_ENABLE=1`，重启飞控。
-4. GCS 消息应出现类似：`BTILT: fw differential tilt running`。
+4. GCS 消息应出现类似：`BTILT: fw tilt+throttle running`。
 5. Full Parameter List 中应出现脚本表参数：
 
 | 参数 | 默认 | 含义 |
 |------|------|------|
 | `BTILT_HORIZ` | 1200 | 真水平 PWM（固飞中心） |
 | `BTILT_TRAVEL` | 100 | 满杆时相对 HORIZ 的单侧最大偏置（µs） |
-| `BTILT_GAIN` | 0.3 | 差动增益 0..1（由低到高试） |
-| `BTILT_REV` | 1 | `1` 或 `-1`，反了改符号 |
+| `BTILT_GAIN` | 0.3 | 倾转差动增益 0..1（由低到高试） |
+| `BTILT_REV` | 1 | 倾转横滚符号：`1` 或 `-1`，反了改符号 |
+| `BTILT_THR` | 1 | `1` 固飞油门直通 S11/S12；`0` 仅倾转 |
+| `BTILT_YAWDT` | 0.1 | 固飞偏航差动增益 -1..1（负号反转；约等于 `RUDD_DT_GAIN` 量级） |
 
-脚本仅在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转；**`QSTABILIZE`** 不覆写。
+脚本仅在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门；**`QSTABILIZE`** 不覆写。
+
+`BTILT_THR` / `BTILT_YAWDT` 使用独立脚本表键 100（与倾转表键 89 分开；ArduPilot 不能扩大已有表的槽位数）。
+
+### 固飞油门不转（已知 BiCopter 路径）
+
+现象：`QSTABILIZE` 解锁后电机可转；`MANUAL` / `STABILIZE` 已 Arm，推油门但 Mission Planner **Servo Output** 里 S11/S12 PWM 不变（卡在约 `SERVO*_MIN`）。
+
+原因：stock BiCopter 在固飞下用 `AP_MotorsTailsitter` 关断写 PWM，盖掉 Plane 双发混控对 73/74 的 scaled 输出。本仓库用脚本在固飞模式直通油门（`BTILT_THR=1`），不改固件。
+
+台架核对（拆桨）：
+
+1. 更新 SD 卡脚本 → 重启 → GCS 见 `BTILT: fw tilt+throttle running`，参数表有 `BTILT_THR`。
+2. `QSTABILIZE` Arm：抬油门仍应慢转（脚本未接管）。
+3. `MANUAL` Arm：推油门 → S11/S12 PWM 上升且电机转；回中停转。
+4. 固飞打偏航 → 左右油门差动；方向反了把 `BTILT_YAWDT` 设为负值。
 
 ## 4. 台架标定（拆桨）
 
@@ -135,7 +152,7 @@ H743-MINI 无内置罗盘；项目默认按**姿态模式**运行（无外置 GP
 ### 4.3 升降舵与电机
 
 - 升降舵：固飞俯仰方向正确；必要时 `SERVO7_REVERSED`。
-- 电机：S11/S12，普通 PWM；对转方向按机身要求，拆桨用电机测试确认。
+- 电机：S11/S12，普通 PWM；对转方向按机身要求。垂起用固件混控；固飞推力靠脚本直通（见 §3），台架按上文「固飞油门」核对。
 
 ## 5. EdgeTX：形态 / 固飞模式 → CH8
 
@@ -158,7 +175,7 @@ H743-MINI 无内置罗盘；项目默认按**姿态模式**运行（无外置 GP
 ## 6. 性能与安全
 
 - Lua 固飞滚转带宽低于源码补丁；增益宁低勿高。
-- 脚本未加载、报错或覆写超时 → 倾转回到固件锁定位（**MIN**，双侧略低于水平）。起飞前确认 GCS 有 BTILT 运行消息。
+- 脚本未加载、报错或覆写超时 → 倾转回到固件锁定位（**MIN**，双侧略低于水平）；固飞油门也会失去直通。起飞前确认 GCS 有 BTILT 运行消息。
 - 低速 / 应急：用**形态开关**切回垂起（`QSTABILIZE`）。勿在低速切固飞并停在 `MANUAL` 当应急。
 - 悬停 PID、过渡速率等保持默认，试飞后再调；本仓库不提供精调值。
 
