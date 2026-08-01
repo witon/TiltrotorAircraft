@@ -22,4 +22,7 @@ pip install -r requirements.txt
 python scripts/upload-params.py --port COMx --mode full
 # 增量：仅项目配置
 python scripts/upload-params.py --port COMx --mode incremental
+
+# 上传 Lua 到飞控 SD（APM/scripts/；默认重启以加载脚本）
+python scripts/upload-lua.py --port COMx
 ```

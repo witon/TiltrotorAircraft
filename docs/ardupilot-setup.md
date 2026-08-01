@@ -70,11 +70,26 @@ H743-MINI 无内置罗盘；项目默认按**姿态模式**运行（无外置 GP
 
 ## 3. 部署 Lua 脚本
 
+### 3.1 CLI（`upload-lua.py`，推荐）
+
+先 Disconnect Mission Planner，再：
+
+```powershell
+python scripts/upload-lua.py --port COMx
+```
+
+脚本经 MAVFTP 写入飞控 SD 的 `APM/scripts/`（目录不存在会创建），检查 `SCR_ENABLE`，默认重启以加载脚本。跳过重启：`--no-reboot`。其它文件：`--script path\to\file.lua`。
+
+### 3.2 手动拷 SD（备选）
+
 1. 飞控插入 MicroSD，目录：`APM/scripts/`（若无则新建）。
 2. 复制 [`scripts/bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 到该目录（覆盖旧版）。
 3. 确认 `SCR_ENABLE=1`，重启飞控。
-4. GCS 消息应出现类似：`BTILT: fw tilt+throttle running`。
-5. Full Parameter List 中应出现脚本表参数：
+
+### 3.3 验证
+
+1. GCS 消息应出现类似：`BTILT: fw tilt+throttle running`。
+2. Full Parameter List 中应出现脚本表参数：
 
 | 参数 | 默认 | 含义 |
 |------|------|------|
