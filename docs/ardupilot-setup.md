@@ -83,7 +83,7 @@ python scripts/upload-lua.py --port COMx
 ### 3.2 手动拷 SD（备选）
 
 1. 飞控插入 MicroSD，目录：`APM/scripts/`（若无则新建）。
-2. 复制 [`scripts/bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 到该目录（覆盖旧版）。
+2. 复制 [`lua/bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 到该目录（覆盖旧版）。
 3. 确认 `SCR_ENABLE=1`，重启飞控。
 
 ### 3.3 验证

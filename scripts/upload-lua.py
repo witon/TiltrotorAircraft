@@ -15,8 +15,8 @@ from pathlib import Path
 from pymavlink import mavutil
 from pymavlink.mavftp import FtpError, MAVFTP
 
-SCRIPTS_DIR = Path(__file__).resolve().parent
-DEFAULT_SCRIPT = SCRIPTS_DIR / "bicopter_fw_tilt_aileron.lua"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_SCRIPT = REPO_ROOT / "lua" / "bicopter_fw_tilt_aileron.lua"
 DEFAULT_REMOTE_DIR = "APM/scripts"
 PUT_TIMEOUT_S = 60.0
 

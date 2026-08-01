@@ -75,7 +75,7 @@ stock 在非 VTOL 且已前倾到位（`fully_fwd`）时，左右倾转被锁在
 
 #### 本机落地约定（Lua 固飞差动）
 
-垂起 / 过渡仍用官方 BiCopter；固飞横滚由 [`scripts/bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 在 `STABILIZE` / `MANUAL` 下覆写 S5/S6。固件刷写见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)；参数与标定见 [ardupilot-setup.md](./ardupilot-setup.md)。
+垂起 / 过渡仍用官方 BiCopter；固飞横滚由 [`lua/bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 在 `STABILIZE` / `MANUAL` 下覆写 S5/S6。固件刷写见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)；参数与标定见 [ardupilot-setup.md](./ardupilot-setup.md)。
 
 | 项目 | 本机约定 |
 |------|----------|
@@ -124,7 +124,7 @@ H743-MINI **V3** 侧面焊盘为 S1–S8、S11、S12（**无 S9/S10**）。本�
 | S11 | 73（ThrottleLeft） | 左电机 ESC 信号 |
 | S12 | 74（ThrottleRight） | 右电机 ESC 信号 |
 
-固飞（`STABILIZE` / `MANUAL`）下推力由 [`bicopter_fw_tilt_aileron.lua`](../scripts/bicopter_fw_tilt_aileron.lua) 覆写 73/74（`BTILT_THR=1`），不依赖 stock 双发混控；垂起仍由固件电机库驱动。见 [ardupilot-setup.md](./ardupilot-setup.md) §3。
+固飞（`STABILIZE` / `MANUAL`）下推力由 [`bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 覆写 73/74（`BTILT_THR=1`），不依赖 stock 双发混控；垂起仍由固件电机库驱动。见 [ardupilot-setup.md](./ardupilot-setup.md) §3。
 
 约束：
 
