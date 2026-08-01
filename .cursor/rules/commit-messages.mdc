@@ -1,0 +1,29 @@
+---
+description: 本仓库 commit message 必须使用中文
+alwaysApply: true
+---
+
+# Commit Message 约定
+
+为本仓库创建或协助提交时，commit message **必须使用中文**。
+
+> IDE「Generate Commit Message」按钮读取仓库根目录 `.cursorrules`；本规则约束 Agent 对话中的提交。
+
+## 格式
+
+采用 conventional commits 前缀 + 中文说明：
+
+- `feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 等
+- 标题与正文均用中文；专有名词可保留英文（如 ArduPilot、Lua、PWM、MatekH743）
+- 1–2 句，侧重「为什么」，不要罗列文件改动
+
+## 示例
+
+```text
+# 好
+fix: 固飞差动倾转右翼 PWM 同号，适配镜像舵机
+refactor: 更新 Lua 脚本路径，调整相关文档引用至新位置
+
+# 不好
+feat: add BiCopter fixed-wing differential tilt and throttle passthrough script
+```
