@@ -84,3 +84,5 @@ EK3_SRC1_VELXY,0
 EK3_SRC1_VELZ,0
 EK3_SRC1_YAW,0
 ARMING_CHECK,1048562
+# ArmOrDisarm: throttle low + rudder right to arm, left to disarm
+ARMING_RUDDER,2

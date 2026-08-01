@@ -62,7 +62,7 @@ python scripts/upload-params.py --port COMx --mode incremental
 | 脚本 | `SCR_ENABLE=1` |
 | 模式 | `FLTMODE_CH=8`；`FLTMODE1=17`，`2=2`，`3=0`（其余垫档） |
 | 输出 | S5=75，S6=76，S7=19，S11=73，S12=74 |
-| 无 GPS/罗盘 | `COMPASS_ENABLE=0`，`GPS1_TYPE=0`，`AHRS_GPS_USE=0`，`EK3_SRC1_POSXY/VELXY/VELZ/YAW=0`，`ARMING_CHECK=1048562`（Plane 4.6：启用除 Compass/GPS 外的解锁检查；4.7+ 可改为 `ARMING_SKIPCHK=12`） |
+| 无 GPS/罗盘 | `COMPASS_ENABLE=0`，`GPS1_TYPE=0`，`AHRS_GPS_USE=0`，`EK3_SRC1_POSXY/VELXY/VELZ/YAW=0`，`ARMING_CHECK=1048562`（Plane 4.6：启用除 Compass/GPS 外的解锁检查；4.7+ 可改为 `ARMING_SKIPCHK=12`），`ARMING_RUDDER=2`（油门最低时舵右解锁、舵左锁定） |
 
 `Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写。本项目不做电池监测标定与罗盘校准。
 
