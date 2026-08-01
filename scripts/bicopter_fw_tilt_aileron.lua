@@ -18,6 +18,7 @@
 --   BTILT_YAWDT  = yaw differential gain (-1..1; neg flips sign; ~0.1 like RUDD_DT)
 --
 -- Tilt sign (REV=1): left roll -> left wing decrease AoA, right increase AoA.
+-- Right servo is mirrored: both sides use the same PWM offset (horiz - delta).
 -- Yaw sign (YAWDT>0): right yaw stick -> left thrust up, right thrust down (Plane twin mix).
 
 local UPDATE_MS = 20
@@ -187,9 +188,9 @@ local function update_tilt()
   local roll = roll_demand() * rev
   local delta = roll * travel * gain
 
-  -- Left roll (+roll with REV=1): left PWM down (less AoA), right PWM up (more AoA)
+  -- Left roll (+roll with REV=1): both PWM down; left less AoA, right (mirrored) more AoA
   local pwm_l = math.floor(horiz - delta + 0.5)
-  local pwm_r = math.floor(horiz + delta + 0.5)
+  local pwm_r = math.floor(horiz - delta + 0.5)
 
   SRV_Channels:set_output_pwm_chan_timeout(tilt_left_chan, pwm_l, OVERRIDE_MS)
   SRV_Channels:set_output_pwm_chan_timeout(tilt_right_chan, pwm_r, OVERRIDE_MS)
