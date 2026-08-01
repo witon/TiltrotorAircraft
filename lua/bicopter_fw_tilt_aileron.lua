@@ -1,7 +1,7 @@
 -- BiCopter fixed-wing differential tilt + FW throttle passthrough
 --
 -- In STABILIZE / MANUAL:
---   - Overrides left/right tilt PWM around HORIZ (equivalent aileron)
+--   - Overrides left/right tilt PWM around per-side HORIZ (equivalent aileron)
 --   - Overrides ThrottleLeft/Right from RC throttle (+ yaw differential)
 --     so stock BiCopter motors SHUT_DOWN / twin-mix fight does not zero S11/S12
 -- VTOL modes (e.g. QSTABILIZE) leave stock firmware in control.
@@ -10,15 +10,16 @@
 -- Servo functions: 75/76 tilt (S5/S6), 73/74 throttle L/R (S11/S12).
 --
 -- Script params (GCS):
---   BTILT_HORIZ  = PWM at true wing-level (FW center)
---   BTILT_TRAVEL = max PWM offset from HORIZ per side at full roll
---   BTILT_GAIN   = 0..1 scale on tilt travel
---   BTILT_REV    = 1 or -1; tilt roll sign
---   BTILT_THR    = 1 enable FW throttle override; 0 tilt-only
---   BTILT_YAWDT  = yaw differential gain (-1..1; neg flips sign; ~0.1 like RUDD_DT)
+--   BTILT_HORIZ_L = left tilt PWM at true wing-level (FW center)
+--   BTILT_HORIZ_R = right tilt PWM at true wing-level (FW center)
+--   BTILT_TRAVEL  = max PWM offset from HORIZ per side at full roll
+--   BTILT_GAIN    = 0..1 scale on tilt travel
+--   BTILT_REV     = 1 or -1; tilt roll sign
+--   BTILT_THR     = 1 enable FW throttle override; 0 tilt-only
+--   BTILT_YAWDT   = yaw differential gain (-1..1; neg flips sign; ~0.1 like RUDD_DT)
 --
 -- Tilt sign (REV=1): left roll -> left wing decrease AoA, right increase AoA.
--- Right servo is mirrored: both sides use the same PWM offset (horiz - delta).
+-- Right servo is mirrored: both sides use the same PWM offset (horiz_n - delta).
 -- Yaw sign (YAWDT>0): right yaw stick -> left thrust up, right thrust down (Plane twin mix).
 
 local UPDATE_MS = 20
@@ -33,14 +34,16 @@ local K_THR_LEFT = 73
 local K_THR_RIGHT = 74
 local K_AILERON = 4
 
--- Table key 89 (size 4): existing tilt params. Key 100 (size 2): FW throttle.
+-- Table key 89 (size 4): tilt params. Key 100 (size 2): FW throttle.
+-- Key 101 (size 1): right HORIZ (table 89 cannot expand past 4 slots).
 -- ArduPilot cannot expand an existing table's slot count.
 local PARAM_TABLE_KEY = 89
 local PARAM_TABLE_KEY_THR = 100
+local PARAM_TABLE_KEY_HR = 101
 local PARAM_TABLE_PREFIX = 'BTILT_'
 
 assert(param:add_table(PARAM_TABLE_KEY, PARAM_TABLE_PREFIX, 4), 'BTILT: add_table 89 failed')
-assert(param:add_param(PARAM_TABLE_KEY, 1, 'HORIZ', 1200), 'BTILT: HORIZ')
+assert(param:add_param(PARAM_TABLE_KEY, 1, 'HORIZ_L', 1200), 'BTILT: HORIZ_L')
 assert(param:add_param(PARAM_TABLE_KEY, 2, 'TRAVEL', 100), 'BTILT: TRAVEL')
 assert(param:add_param(PARAM_TABLE_KEY, 3, 'GAIN', 0.3), 'BTILT: GAIN')
 assert(param:add_param(PARAM_TABLE_KEY, 4, 'REV', 1), 'BTILT: REV')
@@ -49,7 +52,11 @@ assert(param:add_table(PARAM_TABLE_KEY_THR, PARAM_TABLE_PREFIX, 2), 'BTILT: add_
 assert(param:add_param(PARAM_TABLE_KEY_THR, 1, 'THR', 1), 'BTILT: THR')
 assert(param:add_param(PARAM_TABLE_KEY_THR, 2, 'YAWDT', 0.1), 'BTILT: YAWDT')
 
-local p_horiz = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ')
+assert(param:add_table(PARAM_TABLE_KEY_HR, PARAM_TABLE_PREFIX, 1), 'BTILT: add_table 101 failed')
+assert(param:add_param(PARAM_TABLE_KEY_HR, 1, 'HORIZ_R', 1200), 'BTILT: HORIZ_R')
+
+local p_horiz_l = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ_L')
+local p_horiz_r = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ_R')
 local p_travel = Parameter(PARAM_TABLE_PREFIX .. 'TRAVEL')
 local p_gain = Parameter(PARAM_TABLE_PREFIX .. 'GAIN')
 local p_rev = Parameter(PARAM_TABLE_PREFIX .. 'REV')
@@ -168,12 +175,13 @@ local function is_armed()
 end
 
 local function update_tilt()
-  local horiz = p_horiz:get()
+  local horiz_l = p_horiz_l:get()
+  local horiz_r = p_horiz_r:get()
   local travel = p_travel:get()
   local gain = p_gain:get()
   local rev = p_rev:get()
 
-  if not horiz or not travel or not gain or not rev then
+  if not horiz_l or not horiz_r or not travel or not gain or not rev then
     return
   end
 
@@ -189,8 +197,8 @@ local function update_tilt()
   local delta = roll * travel * gain
 
   -- Left roll (+roll with REV=1): both PWM down; left less AoA, right (mirrored) more AoA
-  local pwm_l = math.floor(horiz - delta + 0.5)
-  local pwm_r = math.floor(horiz - delta + 0.5)
+  local pwm_l = math.floor(horiz_l - delta + 0.5)
+  local pwm_r = math.floor(horiz_r - delta + 0.5)
 
   SRV_Channels:set_output_pwm_chan_timeout(tilt_left_chan, pwm_l, OVERRIDE_MS)
   SRV_Channels:set_output_pwm_chan_timeout(tilt_right_chan, pwm_r, OVERRIDE_MS)

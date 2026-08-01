@@ -93,7 +93,8 @@ python scripts/upload-lua.py --port COMx
 
 | 参数 | 默认 | 含义 |
 |------|------|------|
-| `BTILT_HORIZ` | 1200 | 真水平 PWM（固飞中心） |
+| `BTILT_HORIZ_L` | 1200 | 左倾转真水平 PWM（固飞中心） |
+| `BTILT_HORIZ_R` | 1200 | 右倾转真水平 PWM（固飞中心） |
 | `BTILT_TRAVEL` | 100 | 满杆时相对 HORIZ 的单侧最大偏置（µs） |
 | `BTILT_GAIN` | 0.3 | 倾转差动增益 0..1（由低到高试） |
 | `BTILT_REV` | 1 | 倾转横滚符号：`1` 或 `-1`，反了改符号 |
@@ -102,7 +103,7 @@ python scripts/upload-lua.py --port COMx
 
 脚本仅在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门；**`QSTABILIZE`** 不覆写。
 
-`BTILT_THR` / `BTILT_YAWDT` 使用独立脚本表键 100（与倾转表键 89 分开；ArduPilot 不能扩大已有表的槽位数）。
+`BTILT_THR` / `BTILT_YAWDT` 使用独立脚本表键 100；`BTILT_HORIZ_R` 使用表键 101（与倾转表键 89 分开；ArduPilot 不能扩大已有表的槽位数）。旧版 `BTILT_HORIZ` 升级后可忽略，台架时把原值抄到 L/R。
 
 ### 固飞油门不转（已知 BiCopter 路径）
 
@@ -139,7 +140,7 @@ python scripts/upload-lua.py --port COMx
 | `SERVO5_MAX` / `SERVO6_MAX` | 2000 | 垂直后再仰极限 |
 | `SERVO5_REVERSED` / `SERVO6_REVERSED` | 0 | 左右外段同向、垂起时电机轴朝上 |
 | `Q_TILT_YAW_ANGLE` | 15 | 与 MAX 对应的后仰角（度）一致 |
-| `BTILT_HORIZ` | 1200 | 固飞杆回中：外段与中段齐平（介于 MIN 与 TRIM） |
+| `BTILT_HORIZ_L` / `BTILT_HORIZ_R` | 1200 | 固飞杆回中：左右外段各自与中段齐平（介于 MIN 与 TRIM） |
 | `BTILT_REV` | 1 | 左滚 → 左减迎角、右增迎角；反了改为 `-1` |
 | `BTILT_TRAVEL` | 100 | 满杆相对 HORIZ 的单侧最大偏置（µs） |
 | `BTILT_GAIN` | 0.3 | 差动增益 0..1；由低到高试 |
@@ -159,7 +160,7 @@ python scripts/upload-lua.py --port COMx
 
 ### 4.2 固飞水平与差动（Lua）
 
-1. 固飞模式、杆回中：调 `BTILT_HORIZ`，使左右外段与中段**齐平**。
+1. 固飞模式、杆回中：分别调 `BTILT_HORIZ_L` / `BTILT_HORIZ_R`，使左右外段各自与中段**齐平**。
 2. 打横滚：应出现差动。设计符号（`BTILT_REV=1`）：**向左滚** → 左外段减迎角、右外段增迎角（见 [固定翼形态-向左滚转图](./固定翼形态-向左滚转-副翼位置.jpg)）。右舵机镜像安装，脚本对左右写**同号** PWM 偏移；整体横滚反了把 `BTILT_REV` 设为 `-1`（改 `SERVO6_REVERSED` 无效，Lua 直写 PWM 绕过该参数）。
 3. `BTILT_TRAVEL` / `BTILT_GAIN`：从保守值加大，避免打满杆撞机械限位。
 4. 再切回 **QSTABILIZE**，确认垂起倾转正常、脚本未干扰。

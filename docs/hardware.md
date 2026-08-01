@@ -80,16 +80,16 @@ stock 在非 VTOL 且已前倾到位（`fully_fwd`）时，左右倾转被锁在
 | 项目 | 本机约定 |
 |------|----------|
 | `SERVO5/6_MIN` | 机械上「水平以下」极限（减迎角极限） |
-| `BTILT_HORIZ`（脚本） | 真水平 / 固飞中心（介于 MIN 与 TRIM） |
+| `BTILT_HORIZ_L` / `BTILT_HORIZ_R`（脚本） | 左右真水平 / 固飞中心（介于 MIN 与 TRIM） |
 | `SERVO5/6_TRIM` | 垂直（垂起中心；固件 VTOL 用） |
 | `SERVO5/6_MAX` | 垂直后再仰（与 `Q_TILT_YAW_ANGLE` 配套） |
 | 脚本失效 / 覆写超时 | 固件锁到 MIN（双侧略低于水平） |
 
-占位示例：MIN≈1100、`BTILT_HORIZ`≈1200、TRIM≈1500、MAX≈2000（须台架标定）。将 MIN 尽量靠近水平，并用 `BTILT_TRAVEL` 限制单侧差动行程。过渡末期固件可能短暂指向 MIN；进入固飞模式后脚本应尽快拉回 `BTILT_HORIZ`。
+占位示例：MIN≈1100、`BTILT_HORIZ_L`/`BTILT_HORIZ_R`≈1200、TRIM≈1500、MAX≈2000（须台架标定）。将 MIN 尽量靠近水平，并用 `BTILT_TRAVEL` 限制单侧差动行程。过渡末期固件可能短暂指向 MIN；进入固飞模式后脚本应尽快拉回各自 `BTILT_HORIZ_*`。
 
 | 对照 | stock | 本机 |
 |------|-------|------|
-| 固飞倾转 | 锁水平，无差动 | Lua 绕 `BTILT_HORIZ` 差动 |
+| 固飞倾转 | 锁水平，无差动 | Lua 绕 `BTILT_HORIZ_L` / `BTILT_HORIZ_R` 差动 |
 | MIN 语义 | 水平 | 水平以下极限 |
 | 是否改固件 | — | 否（官方 Plane + Scripting） |
 
