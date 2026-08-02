@@ -6,8 +6,11 @@
 --     (falls back to Q_TILT_RATE_UP if DN is 0); differential only after level
 --   - Overrides ThrottleLeft/Right from RC throttle (+ yaw differential)
 --     so stock BiCopter motors SHUT_DOWN / twin-mix fight does not zero S11/S12
--- VTOL modes (e.g. QSTABILIZE) leave stock firmware in control (tilt rate via
--- Q_TILT_RATE_UP when returning to hover).
+-- On leave FW (e.g. to QSTABILIZE):
+--   - Ramps tilt from last FW PWM to SERVO TRIM at Q_TILT_RATE_UP, then
+--     releases so stock VTOL owns tilt (avoids stock snap to MIN below level)
+--   - Throttle override stops immediately on leave FW
+-- Steady VTOL: stock firmware in control.
 --
 -- Deploy: copy to APM/scripts/ on the FC SD card. Requires SCR_ENABLE=1.
 -- Servo functions: 75/76 tilt (S5/S6), 73/74 throttle L/R (S11/S12).
@@ -135,10 +138,14 @@ local p_tilt_rate_dn = Parameter()
 local have_rate_up = p_tilt_rate_up:init('Q_TILT_RATE_UP')
 local have_rate_dn = p_tilt_rate_dn:init('Q_TILT_RATE_DN')
 
--- Ramp state (PWM). Reset when leaving FW modes.
+-- Ramp state (PWM).
 local was_fw = false
+local recovering_vtol = false
+local recover_t0_ms = 0
 local cur_l = tilt_left_trim
 local cur_r = tilt_right_trim
+local last_pwm_l = tilt_left_trim
+local last_pwm_r = tilt_right_trim
 
 local function clamp(x, lo, hi)
   if x < lo then return lo end
@@ -163,6 +170,17 @@ local function tilt_rate_dps()
       end
     end
   elseif have_rate_up then
+    local up = p_tilt_rate_up:get()
+    if up and up > 0 then
+      rate = up
+    end
+  end
+  return rate
+end
+
+local function tilt_rate_up_dps()
+  local rate = DEFAULT_TILT_RATE_DPS
+  if have_rate_up then
     local up = p_tilt_rate_up:get()
     if up and up > 0 then
       rate = up
@@ -249,6 +267,16 @@ local function is_armed()
   return ok and armed
 end
 
+local function now_ms()
+  local ok, t = pcall(function()
+    return millis()
+  end)
+  if ok and t then
+    return t
+  end
+  return 0
+end
+
 local function update_tilt(entering_fw)
   local horiz_l = p_horiz_l:get()
   local horiz_r = p_horiz_r:get()
@@ -293,8 +321,44 @@ local function update_tilt(entering_fw)
   local pwm_l = math.floor(cur_l - delta + 0.5)
   local pwm_r = math.floor(cur_r - delta + 0.5)
 
+  last_pwm_l = pwm_l
+  last_pwm_r = pwm_r
+
   SRV_Channels:set_output_pwm_chan_timeout(tilt_left_chan, pwm_l, OVERRIDE_MS)
   SRV_Channels:set_output_pwm_chan_timeout(tilt_right_chan, pwm_r, OVERRIDE_MS)
+end
+
+local function update_recover_vtol()
+  local horiz_l = p_horiz_l:get()
+  local horiz_r = p_horiz_r:get()
+  if not horiz_l then
+    horiz_l = tilt_left_trim
+  end
+  if not horiz_r then
+    horiz_r = tilt_right_trim
+  end
+
+  local rate = tilt_rate_up_dps()
+  local step_l = ramp_max_step(tilt_left_trim, horiz_l, rate)
+  local step_r = ramp_max_step(tilt_right_trim, horiz_r, rate)
+  cur_l = approach(cur_l, tilt_left_trim, step_l)
+  cur_r = approach(cur_r, tilt_right_trim, step_r)
+
+  local pwm_l = math.floor(cur_l + 0.5)
+  local pwm_r = math.floor(cur_r + 0.5)
+  last_pwm_l = pwm_l
+  last_pwm_r = pwm_r
+
+  SRV_Channels:set_output_pwm_chan_timeout(tilt_left_chan, pwm_l, OVERRIDE_MS)
+  SRV_Channels:set_output_pwm_chan_timeout(tilt_right_chan, pwm_r, OVERRIDE_MS)
+
+  local at_trim = math.abs(cur_l - tilt_left_trim) <= RAMP_EPS_PWM
+    and math.abs(cur_r - tilt_right_trim) <= RAMP_EPS_PWM
+  local min_ms = (TRIM_HORIZ_DEG / rate) * 1000.0
+  local elapsed = now_ms() - recover_t0_ms
+  if at_trim and elapsed >= min_ms then
+    recovering_vtol = false
+  end
 end
 
 local function update_throttle()
@@ -334,16 +398,29 @@ end
 local function update()
   local mode = vehicle:get_mode()
   local in_fw = fw_mode(mode)
-  if not in_fw then
-    was_fw = false
+
+  if in_fw then
+    if recovering_vtol then
+      recovering_vtol = false
+    end
+    local entering_fw = not was_fw
+    was_fw = true
+    update_tilt(entering_fw)
+    update_throttle()
     return update, UPDATE_MS
   end
 
-  local entering_fw = not was_fw
-  was_fw = true
+  if was_fw then
+    was_fw = false
+    recovering_vtol = true
+    recover_t0_ms = now_ms()
+    cur_l = last_pwm_l
+    cur_r = last_pwm_r
+  end
 
-  update_tilt(entering_fw)
-  update_throttle()
+  if recovering_vtol then
+    update_recover_vtol()
+  end
 
   return update, UPDATE_MS
 end

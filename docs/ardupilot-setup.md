@@ -123,9 +123,9 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_THR` | 1 | `1` 固飞油门直通 S11/S12；`0` 仅倾转 |
 | `BTILT_YAWDT` | 0.1 | 固飞偏航差动增益 -1..1（负号反转；约等于 `RUDD_DT_GAIN` 量级） |
 
-脚本仅在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门；**`QSTABILIZE`** 不覆写。
+脚本在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门。固飞 → **`QSTABILIZE`** 时短暂接管倾转移交；垂起稳态不覆写。
 
-`QSTABILIZE` → 固飞时，脚本按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）将倾转从当前角渐进扫到 `BTILT_HORIZ_*`，到位后再做差动；不再瞬间跳到水平。固飞 → `QSTABILIZE` 仍由固件按 `Q_TILT_RATE_UP` 限速回垂直。
+`QSTABILIZE` → 固飞时，脚本按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）将倾转从当前角渐进扫到 `BTILT_HORIZ_*`，到位后再做差动；不再瞬间跳到水平。固飞 → `QSTABILIZE` 时，脚本按 `Q_TILT_RATE_UP` 从上一帧固飞 PWM 渐进扫到 `SERVO*_TRIM`，并与固件约 90° 过渡等时后再松手，避免 stock 瞬时落到 **MIN**（水平以下）；油门覆写在离开固飞时立即停止。
 
 `BTILT_THR` / `BTILT_YAWDT` 使用独立脚本表键 100；`BTILT_HORIZ_R` 使用表键 101（与倾转表键 89 分开；ArduPilot 不能扩大已有表的槽位数）。旧版 `BTILT_HORIZ` 升级后可忽略，台架时把原值抄到 L/R。
 
@@ -187,7 +187,7 @@ python scripts/upload-lua.py --port COMx
 1. 固飞模式、杆回中：分别调 `BTILT_HORIZ_L` / `BTILT_HORIZ_R`，使左右外段各自与中段**齐平**。
 2. 打横滚：应出现差动。设计符号（`BTILT_REV=1`）：**向左滚** → 左外段减迎角、右外段增迎角（见 [固定翼形态-向左滚转图](./固定翼形态-向左滚转-副翼位置.jpg)）。右舵机镜像安装，脚本对左右写**同号** PWM 偏移；整体横滚反了把 `BTILT_REV` 设为 `-1`（改 `SERVO6_REVERSED` 无效，Lua 直写 PWM 绕过该参数）。
 3. `BTILT_TRAVEL` / `BTILT_GAIN`：从保守值加大，避免打满杆撞机械限位。
-4. 再切回 **QSTABILIZE**，确认垂起倾转正常、脚本未干扰。
+4. 再切回 **QSTABILIZE**：倾转应从水平平滑收到垂直，**无明显先低于水平再竖起**；到位后垂起偏航矢量正常，稳态由固件控制。
 
 ### 4.3 升降舵与电机
 
@@ -228,7 +228,7 @@ ArduPilot 将 `FLTMODE_CH` PWM 划成六段；本机按低/中/高三段垫档�
 - Lua 固飞滚转带宽低于源码补丁；增益宁低勿高。
 - 脚本未加载、报错或覆写超时 → 倾转回到固件锁定位（**MIN**，双侧略低于水平）；固飞油门也会失去直通。起飞前确认 GCS 有 BTILT 运行消息。
 - 低速 / 应急：用**形态开关**切回垂起（`QSTABILIZE`）。勿在低速切固飞并停在 `MANUAL` 当应急。
-- 悬停 PID、过渡速率（`Q_TILT_RATE_*`）等保持默认，试飞后再调；本仓库不提供精调值。去固飞倾转渐进与回垂起共用这些速率参数。
+- 悬停 PID、过渡速率（`Q_TILT_RATE_*`）等保持默认，试飞后再调；本仓库不提供精调值。去固飞用 `Q_TILT_RATE_DN`（回退 UP）；回垂起移交用 `Q_TILT_RATE_UP`。
 
 ## 7. 推荐顺序小结
 
