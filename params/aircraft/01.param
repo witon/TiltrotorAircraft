@@ -1,0 +1,20 @@
+# Aircraft 01 — tilt servo + FW level calib
+# Exported from FC; upload via: upload-params.py --aircraft 01
+
+# S5 TiltMotorLeft (FUNCTION 75)
+SERVO5_MIN,950
+SERVO5_TRIM,1150
+SERVO5_MAX,2200
+SERVO5_REVERSED,1
+
+# S6 TiltMotorRight (FUNCTION 76)
+SERVO6_MIN,950
+SERVO6_TRIM,1950
+SERVO6_MAX,2200
+SERVO6_REVERSED,0
+
+Q_TILT_YAW_ANGLE,15
+
+# Lua FW level (requires bicopter_fw_tilt_aileron.lua)
+BTILT_HORIZ_L,2000
+BTILT_HORIZ_R,1090
