@@ -2,9 +2,12 @@
 --
 -- In STABILIZE / MANUAL:
 --   - Overrides left/right tilt PWM around per-side HORIZ (equivalent aileron)
+--   - On enter FW: ramps tilt from current/TRIM to HORIZ at Q_TILT_RATE_DN
+--     (falls back to Q_TILT_RATE_UP if DN is 0); differential only after level
 --   - Overrides ThrottleLeft/Right from RC throttle (+ yaw differential)
 --     so stock BiCopter motors SHUT_DOWN / twin-mix fight does not zero S11/S12
--- VTOL modes (e.g. QSTABILIZE) leave stock firmware in control.
+-- VTOL modes (e.g. QSTABILIZE) leave stock firmware in control (tilt rate via
+-- Q_TILT_RATE_UP when returning to hover).
 --
 -- Deploy: copy to APM/scripts/ on the FC SD card. Requires SCR_ENABLE=1.
 -- Servo functions: 75/76 tilt (S5/S6), 73/74 throttle L/R (S11/S12).
@@ -24,6 +27,10 @@
 
 local UPDATE_MS = 20
 local OVERRIDE_MS = 60
+local RAMP_EPS_PWM = 2
+-- TRIM <-> HORIZ treated as ~90 deg for rate scaling (matches BiCopter full stroke)
+local TRIM_HORIZ_DEG = 90.0
+local DEFAULT_TILT_RATE_DPS = 40.0
 
 local MODE_MANUAL = 0
 local MODE_STABILIZE = 2
@@ -98,26 +105,40 @@ do
   yaw_rc_chan = rcmap('RCMAP_YAW', 4)
 end
 
+local function servo_lim(chan_0based, which, default)
+  local p = Parameter()
+  local name = string.format('SERVO%u_%s', chan_0based + 1, which)
+  if p:init(name) then
+    local v = p:get()
+    if v then
+      return math.floor(v)
+    end
+  end
+  return default
+end
+
 -- SERVOn_MIN/MAX for motor channels (find_channel is 0-based index)
 local thr_left_min, thr_left_max = 1000, 2000
 local thr_right_min, thr_right_max = 1000, 2000
 if thr_ok then
-  local function servo_lim(chan_0based, which, default)
-    local p = Parameter()
-    local name = string.format('SERVO%u_%s', chan_0based + 1, which)
-    if p:init(name) then
-      local v = p:get()
-      if v then
-        return math.floor(v)
-      end
-    end
-    return default
-  end
   thr_left_min = servo_lim(thr_left_chan, 'MIN', 1000)
   thr_left_max = servo_lim(thr_left_chan, 'MAX', 2000)
   thr_right_min = servo_lim(thr_right_chan, 'MIN', 1000)
   thr_right_max = servo_lim(thr_right_chan, 'MAX', 2000)
 end
+
+local tilt_left_trim = servo_lim(tilt_left_chan, 'TRIM', 1500)
+local tilt_right_trim = servo_lim(tilt_right_chan, 'TRIM', 1500)
+
+local p_tilt_rate_up = Parameter()
+local p_tilt_rate_dn = Parameter()
+local have_rate_up = p_tilt_rate_up:init('Q_TILT_RATE_UP')
+local have_rate_dn = p_tilt_rate_dn:init('Q_TILT_RATE_DN')
+
+-- Ramp state (PWM). Reset when leaving FW modes.
+local was_fw = false
+local cur_l = tilt_left_trim
+local cur_r = tilt_right_trim
 
 local function clamp(x, lo, hi)
   if x < lo then return lo end
@@ -127,6 +148,60 @@ end
 
 local function fw_mode(mode)
   return mode == MODE_MANUAL or mode == MODE_STABILIZE
+end
+
+local function tilt_rate_dps()
+  local rate = DEFAULT_TILT_RATE_DPS
+  if have_rate_dn then
+    local dn = p_tilt_rate_dn:get()
+    if dn and dn > 0 then
+      rate = dn
+    elseif have_rate_up then
+      local up = p_tilt_rate_up:get()
+      if up and up > 0 then
+        rate = up
+      end
+    end
+  elseif have_rate_up then
+    local up = p_tilt_rate_up:get()
+    if up and up > 0 then
+      rate = up
+    end
+  end
+  return rate
+end
+
+local function read_tilt_pwm(servo_fn, fallback)
+  local ok, pwm = pcall(function()
+    return SRV_Channels:get_output_pwm(servo_fn)
+  end)
+  if ok and pwm and type(pwm) == 'number' and pwm > 0 then
+    return math.floor(pwm)
+  end
+  return fallback
+end
+
+local function approach(cur, target, max_step)
+  local err = target - cur
+  if err > max_step then
+    return cur + max_step
+  end
+  if err < -max_step then
+    return cur - max_step
+  end
+  return target
+end
+
+local function ramp_max_step(trim_pwm, horiz_pwm, rate_dps)
+  local span = math.abs(trim_pwm - horiz_pwm)
+  if span < 1 then
+    span = 1
+  end
+  local step = span * (rate_dps / TRIM_HORIZ_DEG) * (UPDATE_MS / 1000.0)
+  if step < 0.5 then
+    step = 0.5
+  end
+  return step
 end
 
 -- Normalized stick in [-1, 1] from RC PWM (center 1500, deadzone ~30 us)
@@ -174,7 +249,7 @@ local function is_armed()
   return ok and armed
 end
 
-local function update_tilt()
+local function update_tilt(entering_fw)
   local horiz_l = p_horiz_l:get()
   local horiz_r = p_horiz_r:get()
   local travel = p_travel:get()
@@ -193,12 +268,30 @@ local function update_tilt()
     rev = -1
   end
 
-  local roll = roll_demand() * rev
-  local delta = roll * travel * gain
+  if entering_fw then
+    cur_l = read_tilt_pwm(K_TILT_LEFT, tilt_left_trim)
+    cur_r = read_tilt_pwm(K_TILT_RIGHT, tilt_right_trim)
+  end
+
+  local rate = tilt_rate_dps()
+  local step_l = ramp_max_step(tilt_left_trim, horiz_l, rate)
+  local step_r = ramp_max_step(tilt_right_trim, horiz_r, rate)
+  cur_l = approach(cur_l, horiz_l, step_l)
+  cur_r = approach(cur_r, horiz_r, step_r)
+
+  local at_level = math.abs(cur_l - horiz_l) <= RAMP_EPS_PWM
+    and math.abs(cur_r - horiz_r) <= RAMP_EPS_PWM
+  local delta = 0
+  if at_level then
+    cur_l = horiz_l
+    cur_r = horiz_r
+    local roll = roll_demand() * rev
+    delta = roll * travel * gain
+  end
 
   -- Left roll (+roll with REV=1): both PWM down; left less AoA, right (mirrored) more AoA
-  local pwm_l = math.floor(horiz_l - delta + 0.5)
-  local pwm_r = math.floor(horiz_r - delta + 0.5)
+  local pwm_l = math.floor(cur_l - delta + 0.5)
+  local pwm_r = math.floor(cur_r - delta + 0.5)
 
   SRV_Channels:set_output_pwm_chan_timeout(tilt_left_chan, pwm_l, OVERRIDE_MS)
   SRV_Channels:set_output_pwm_chan_timeout(tilt_right_chan, pwm_r, OVERRIDE_MS)
@@ -240,11 +333,16 @@ end
 
 local function update()
   local mode = vehicle:get_mode()
-  if not fw_mode(mode) then
+  local in_fw = fw_mode(mode)
+  if not in_fw then
+    was_fw = false
     return update, UPDATE_MS
   end
 
-  update_tilt()
+  local entering_fw = not was_fw
+  was_fw = true
+
+  update_tilt(entering_fw)
   update_throttle()
 
   return update, UPDATE_MS

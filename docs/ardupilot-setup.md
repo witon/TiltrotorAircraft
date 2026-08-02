@@ -125,6 +125,8 @@ python scripts/upload-lua.py --port COMx
 
 脚本仅在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门；**`QSTABILIZE`** 不覆写。
 
+`QSTABILIZE` → 固飞时，脚本按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）将倾转从当前角渐进扫到 `BTILT_HORIZ_*`，到位后再做差动；不再瞬间跳到水平。固飞 → `QSTABILIZE` 仍由固件按 `Q_TILT_RATE_UP` 限速回垂直。
+
 `BTILT_THR` / `BTILT_YAWDT` 使用独立脚本表键 100；`BTILT_HORIZ_R` 使用表键 101（与倾转表键 89 分开；ArduPilot 不能扩大已有表的槽位数）。旧版 `BTILT_HORIZ` 升级后可忽略，台架时把原值抄到 L/R。
 
 ### 固飞油门不转（已知 BiCopter 路径）
@@ -226,7 +228,7 @@ ArduPilot 将 `FLTMODE_CH` PWM 划成六段；本机按低/中/高三段垫档�
 - Lua 固飞滚转带宽低于源码补丁；增益宁低勿高。
 - 脚本未加载、报错或覆写超时 → 倾转回到固件锁定位（**MIN**，双侧略低于水平）；固飞油门也会失去直通。起飞前确认 GCS 有 BTILT 运行消息。
 - 低速 / 应急：用**形态开关**切回垂起（`QSTABILIZE`）。勿在低速切固飞并停在 `MANUAL` 当应急。
-- 悬停 PID、过渡速率等保持默认，试飞后再调；本仓库不提供精调值。
+- 悬停 PID、过渡速率（`Q_TILT_RATE_*`）等保持默认，试飞后再调；本仓库不提供精调值。去固飞倾转渐进与回垂起共用这些速率参数。
 
 ## 7. 推荐顺序小结
 
