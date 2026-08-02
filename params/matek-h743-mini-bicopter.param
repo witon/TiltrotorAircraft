@@ -36,12 +36,12 @@ FLTMODE5,0
 FLTMODE6,0
 
 # --- Servo outputs (H743-MINI V3 side pads S5–S8, S11–S12) ---
-# S5 tilt left — MIN below level, TRIM vertical, MAX past-vertical yaw
+# S5 tilt left — MIN below level, TRIM vertical, MAX past-vertical yaw; reversed for physical servo
 SERVO5_FUNCTION,75
 SERVO5_MIN,1100
 SERVO5_TRIM,1500
 SERVO5_MAX,2000
-SERVO5_REVERSED,0
+SERVO5_REVERSED,1
 
 # S6 tilt right
 SERVO6_FUNCTION,76

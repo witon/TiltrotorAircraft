@@ -138,7 +138,7 @@ python scripts/upload-lua.py --port COMx
 | `SERVO5_MIN` / `SERVO6_MIN` | 1100 | 机械「水平以下」极限；尽量靠近水平 |
 | `SERVO5_TRIM` / `SERVO6_TRIM` | 1500 | 垂直（垂起中心） |
 | `SERVO5_MAX` / `SERVO6_MAX` | 2000 | 垂直后再仰极限 |
-| `SERVO5_REVERSED` / `SERVO6_REVERSED` | 0 | 左右外段同向、垂起时电机轴朝上 |
+| `SERVO5_REVERSED` / `SERVO6_REVERSED` | 1 / 0 | 左倾转反向；左右外段同向、垂起时电机轴朝上 |
 | `Q_TILT_YAW_ANGLE` | 15 | 与 MAX 对应的后仰角（度）一致 |
 | `BTILT_HORIZ_L` / `BTILT_HORIZ_R` | 1200 | 固飞杆回中：左右外段各自与中段齐平（介于 MIN 与 TRIM） |
 | `BTILT_REV` | 1 | 左滚 → 左减迎角、右增迎角；反了改为 `-1` |
