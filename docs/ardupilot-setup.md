@@ -60,7 +60,7 @@ python scripts/upload-params.py --port COMx --mode incremental
 | 姿态 | `AHRS_ORIENTATION=16` |
 | CRSF | `BRD_ALT_CONFIG=1`，`SERIAL7_PROTOCOL=23` |
 | 脚本 | `SCR_ENABLE=1` |
-| 模式 | `FLTMODE_CH=8`；`FLTMODE1=17`，`2=2`，`3=0`（其余垫档） |
+| 模式 | `FLTMODE_CH=8`；`FLTMODE1..6=17,17,2,2,0,0`（按低/中/高三段垫档，勿循环 `17/2/0`） |
 | 输出 | S5=75，S6=76，S7=19，S11=73，S12=74 |
 | 无 GPS/罗盘 | `COMPASS_ENABLE=0`，`GPS1_TYPE=0`，`AHRS_GPS_USE=0`，`EK3_SRC1_POSXY/VELXY/VELZ/YAW=0`，`ARMING_CHECK=1048562`（Plane 4.6：启用除 Compass/GPS 外的解锁检查；4.7+ 可改为 `ARMING_SKIPCHK=12`），`ARMING_RUDDER=2`（油门最低时舵右解锁、舵左锁定） |
 
@@ -176,15 +176,26 @@ python scripts/upload-lua.py --port COMx
 
 | 形态开关 | 固飞模式开关 | 目标模式 | 建议 CH8 PWM 区 |
 |----------|--------------|----------|-----------------|
-| 垂起 | （忽略） | QSTABILIZE (17) | 低（如 ~1165） |
-| 固飞 | 自稳 | STABILIZE (2) | 中（如 ~1500） |
-| 固飞 | 纯手动 | MANUAL (0) | 高（如 ~1835） |
+| 垂起 | （忽略） | QSTABILIZE (17) | 低（如 ~1165）→ `FLTMODE1` |
+| 固飞 | 自稳 | STABILIZE (2) | 中（官方三档 ~1425 或回中 ~1500）→ `FLTMODE3`/`4` |
+| 固飞 | 纯手动 | MANUAL (0) | 高（如 ~1835）→ `FLTMODE6` |
+
+ArduPilot 将 `FLTMODE_CH` PWM 划成六段；本机按低/中/高三段垫档（勿把 `17/2/0` 循环两遍，否则中位 ~1500 会落到 `FLTMODE4=QSTABILIZE`）：
+
+| 槽位 | PWM 区间 | 本机模式 |
+|------|----------|----------|
+| `FLTMODE1` | ≤1230 | QSTABILIZE (17) |
+| `FLTMODE2` | 1231–1360 | QSTABILIZE (17) |
+| `FLTMODE3` | 1361–1490 | STABILIZE (2) |
+| `FLTMODE4` | 1491–1620 | STABILIZE (2) |
+| `FLTMODE5` | 1621–1749 | MANUAL (0) |
+| `FLTMODE6` | ≥1750 | MANUAL (0) |
 
 原则：
 
 - 形态=垂起时，混控**强制**输出 QSTABILIZE 对应 PWM，与 SB 无关。
 - 形态=固飞时，按 SB 在 STABILIZE / MANUAL 两档间选。
-- 飞控侧 `FLTMODE1..6` 已按 17/2/0 垫档；PWM 阈值与 Mission Planner 模式指示对齐即可。
+- 飞控侧已设 `FLTMODE1..6=17,17,2,2,0,0`；用 Mission Planner 看 CH8 Current PWM 与模式指示对齐即可。
 
 完整 `.etx` 不提供；按上表在 EdgeTX 混控页自建。
 
