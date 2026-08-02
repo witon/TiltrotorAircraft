@@ -5,6 +5,9 @@ Modes:
   incremental (default) — write project config only (--param-file).
   full — write init.param, reboot and wait, then write project config.
 
+Optional --aircraft NN writes params/aircraft/NN.param after the project file
+(overlay for per-airframe tilt calib). Export with export-aircraft-calib.py.
+
 Writes use batched PARAM_SET (default 16): send a batch, require PARAM_VALUE
 acks whose names and values match; any missing or mismatched ack fails the upload.
 
@@ -23,8 +26,20 @@ from pymavlink import mavutil
 
 PARAM_LINE = re.compile(r"^([A-Za-z0-9_]+)\s*,\s*(-?[0-9.eE+-]+)\s*$")
 PARAMS_DIR = Path(__file__).resolve().parents[1] / "params"
+AIRCRAFT_DIR = PARAMS_DIR / "aircraft"
 REBOOT_WAIT_S = 14.0
 DEFAULT_BATCH_SIZE = 16
+
+
+def normalize_aircraft_id(raw: str) -> str:
+    """Accept '1' or '01'; return zero-padded two-digit id."""
+    s = raw.strip()
+    if not s.isdigit():
+        raise ValueError(f"aircraft id must be numeric, got: {raw!r}")
+    n = int(s)
+    if n < 0 or n > 99:
+        raise ValueError(f"aircraft id must be 0..99, got: {n}")
+    return f"{n:02d}"
 
 
 def load_params(path: Path) -> list[tuple[str, float]]:
@@ -269,6 +284,11 @@ def main() -> int:
         default=DEFAULT_BATCH_SIZE,
         help=f"PARAM_SET pipeline batch size (default: {DEFAULT_BATCH_SIZE})",
     )
+    parser.add_argument(
+        "--aircraft",
+        default=None,
+        help="After project config, write params/aircraft/NN.param overlay (e.g. 01)",
+    )
     args = parser.parse_args()
 
     if args.batch_size < 1:
@@ -281,6 +301,21 @@ def main() -> int:
         print(f"Init file not found: {args.init_file}")
         return 1
 
+    aircraft_id: str | None = None
+    aircraft_file: Path | None = None
+    if args.aircraft is not None:
+        try:
+            aircraft_id = normalize_aircraft_id(args.aircraft)
+        except ValueError as exc:
+            print(exc)
+            return 1
+        aircraft_file = AIRCRAFT_DIR / f"{aircraft_id}.param"
+        if not aircraft_file.is_file():
+            print(f"Aircraft calib not found: {aircraft_file}")
+            print("Export first: python scripts/export-aircraft-calib.py --port COMx "
+                  f"--aircraft {aircraft_id}")
+            return 1
+
     master = connect(args.port, args.baud)
     if master is None:
         return 1
@@ -290,9 +325,20 @@ def main() -> int:
     total_n = 0
     all_failed: list[str] = []
 
+    stages_total = 1  # project
     if args.mode == "full":
+        stages_total += 1
+    if aircraft_file is not None:
+        stages_total += 1
+    stage_idx = 0
+
+    if args.mode == "full":
+        stage_idx += 1
         init_params = load_params(args.init_file)
-        print(f"\n=== [1/2] init: {args.init_file.name} ({len(init_params)} params) ===")
+        print(
+            f"\n=== [{stage_idx}/{stages_total}] init: {args.init_file.name} "
+            f"({len(init_params)} params) ==="
+        )
         ok, failed = write_params(
             master, init_params, "init", batch_size=args.batch_size
         )
@@ -311,17 +357,12 @@ def main() -> int:
             return 1
 
     project_params = load_params(args.param_file)
+    stage_idx += 1
     stage = "project" if args.mode == "full" else "incr"
-    if args.mode == "full":
-        print(
-            f"\n=== [2/2] project: {args.param_file.name} "
-            f"({len(project_params)} params) ==="
-        )
-    else:
-        print(
-            f"Loaded {len(project_params)} params from {args.param_file.name} "
-            f"(incremental)"
-        )
+    print(
+        f"\n=== [{stage_idx}/{stages_total}] project: {args.param_file.name} "
+        f"({len(project_params)} params) ==="
+    )
 
     ok, failed = write_params(
         master, project_params, stage, batch_size=args.batch_size
@@ -329,12 +370,33 @@ def main() -> int:
     total_ok += ok
     total_n += len(project_params)
     all_failed.extend(failed)
+    if failed:
+        print("project failed:", ", ".join(failed))
+        return 2
+
+    if aircraft_file is not None and aircraft_id is not None:
+        aircraft_params = load_params(aircraft_file)
+        stage_idx += 1
+        label = f"aircraft {aircraft_id}"
+        print(
+            f"\n=== [{stage_idx}/{stages_total}] {label}: {aircraft_file.name} "
+            f"({len(aircraft_params)} params) ==="
+        )
+        ok, failed = write_params(
+            master, aircraft_params, label, batch_size=args.batch_size
+        )
+        total_ok += ok
+        total_n += len(aircraft_params)
+        all_failed.extend(failed)
+        if failed:
+            print(f"{label} failed:", ", ".join(failed))
+            return 2
 
     print("---")
     if args.mode == "full":
         print(f"Done (full): {total_ok}/{total_n} acknowledged")
     else:
-        print(f"Done: {ok}/{len(project_params)} acknowledged")
+        print(f"Done (incremental): {total_ok}/{total_n} acknowledged")
     if all_failed:
         print("Failed:", ", ".join(all_failed))
         return 2

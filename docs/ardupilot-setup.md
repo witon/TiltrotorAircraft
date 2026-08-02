@@ -23,10 +23,12 @@
 
 | 模式 | 用途 | 顺序 |
 |------|------|------|
-| **全量** | 新板 / 需可复现基线 | [`init.param`](../params/init.param)（默认快照且 `Q_ENABLE=1`）→ **重启**（`Q_*` 出现）→ [`matek-h743-mini-bicopter.param`](../params/matek-h743-mini-bicopter.param) → 重启 |
-| **增量** | 已配置过、只改项目差异 | 仅写项目配置（飞控上须已有 `Q_*`） |
+| **全量** | 新板 / 需可复现基线 | [`init.param`](../params/init.param)（默认快照且 `Q_ENABLE=1`）→ **重启**（`Q_*` 出现）→ [`matek-h743-mini-bicopter.param`](../params/matek-h743-mini-bicopter.param) →（可选）[`params/aircraft/NN.param`](../params/aircraft/) → 重启 |
+| **增量** | 已配置过、只改项目差异 | 仅写项目配置（飞控上须已有 `Q_*`）；可选再写机号 overlay |
 
 `init.param` 来自恢复默认后的导出，并把 `Q_ENABLE` 置为 1，因此全量不再需要单独的 q-enable 文件。已用官方 Plane 参数元数据去掉 `Volatile` / `ReadOnly` / `Calibration` 项（见 [`init.param.removed.txt`](../params/init.param.removed.txt)；重跑：`python scripts/filter-init-params.py`）。未开 `Q_ENABLE` 时 `Q_TILT_*` 不在参数表中，故全量必须在 init 之后重启再写项目配置。
+
+项目 param 中的 `SERVO5/6_*` 端点与 `Q_TILT_YAW_ANGLE` 为占位。台架标定后按机号入库到 [`params/aircraft/NN.param`](../params/aircraft/)（含 `BTILT_HORIZ_L/R`），上传时用 `--aircraft NN` 在项目配置之后叠加写入。
 
 ### 2.1 Mission Planner（GUI）
 
@@ -48,9 +50,29 @@ pip install -r requirements.txt
 python scripts/upload-params.py --port COMx --mode full
 # 增量
 python scripts/upload-params.py --port COMx --mode incremental
+# 全量 / 增量 + 1 号机倾转标定 overlay
+python scripts/upload-params.py --port COMx --mode full --aircraft 01
+python scripts/upload-params.py --port COMx --mode incremental --aircraft 01
 ```
 
 默认波特率 115200；`--no-reboot` 可跳过**最终**重启（全量中间的 init 后重启仍会执行）。
+
+### 2.3 按机号导出标定（`export-aircraft-calib.py`）
+
+台架标定完成后，从飞控读出并写入 `params/aircraft/NN.param`（机号两位，如 `01`）：
+
+| 参数 | 说明 |
+|------|------|
+| `SERVO5/6_MIN` / `TRIM` / `MAX` / `REVERSED` | 倾转舵机行程与中位 |
+| `Q_TILT_YAW_ANGLE` | 与 MAX 后仰角一致 |
+| `BTILT_HORIZ_L` / `BTILT_HORIZ_R` | 固飞真水平（须已加载 Lua） |
+
+```powershell
+# 须已部署 Lua 并重启，否则无 BTILT_*，脚本会中止且不写文件
+python scripts/export-aircraft-calib.py --port COMx --aircraft 01
+```
+
+之后对该机上传参数时带 `--aircraft 01`。新机标定完同样 export 为 `02.param` 等。
 
 ### 参数摘要
 
@@ -64,7 +86,7 @@ python scripts/upload-params.py --port COMx --mode incremental
 | 输出 | S5=75，S6=76，S7=19，S11=73，S12=74 |
 | 无 GPS/罗盘 | `COMPASS_ENABLE=0`，`GPS1_TYPE=0`，`AHRS_GPS_USE=0`，`EK3_SRC1_POSXY/VELXY/VELZ/YAW=0`，`ARMING_CHECK=1048562`（Plane 4.6：启用除 Compass/GPS 外的解锁检查；4.7+ 可改为 `ARMING_SKIPCHK=12`），`ARMING_RUDDER=2`（油门最低时舵右解锁、舵左锁定） |
 
-`Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写。本项目不做电池监测标定与罗盘校准。
+`Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写，并用 §2.3 导出到机号文件。本项目不做电池监测标定与罗盘校准。
 
 H743-MINI 无内置罗盘；项目默认按**姿态模式**运行（无外置 GPS/罗盘），可解锁台架与 `QSTABILIZE` / `STABILIZE` / `MANUAL`。勿使用需定位的模式（`AUTO` / `RTL` / `QLOITER` / `QRTL` 等）；无罗盘时偏航会漂，垂起偏航保持较差。日后外接 GPS+罗盘时：恢复 `GPS1_TYPE`、打开罗盘、还原 `EK3_SRC1_*`（水平位置/速度用 GPS，航向用罗盘）、`ARMING_CHECK=1`（或 4.7+ 的 `ARMING_SKIPCHK=0`），并完成罗盘校准与 GPS 定位后再飞自主模式。
 
@@ -122,7 +144,7 @@ python scripts/upload-lua.py --port COMx
 
 ### 需标定参数一览
 
-项目 param 中倾转 / `BTILT_*` / 升降舵端点为占位，须台架改写后再飞。悬停 PID、过渡速率等保持默认，试飞后再调（见 §6）。
+项目 param 中倾转 / `BTILT_*` / 升降舵端点为占位，须台架改写后再飞。倾转端点与 `BTILT_HORIZ_*` 标定完成后用 `export-aircraft-calib.py` 按机号入库（见 §2.3）。悬停 PID、过渡速率等保持默认，试飞后再调（见 §6）。
 
 **地面（台架前）：**
 
@@ -214,9 +236,11 @@ flowchart LR
   flash[DFU或MP刷写]
   init[全量init含Q_ENABLE]
   reboot1[重启]
-  param[导入项目param重启]
+  param[导入项目param]
+  ac[可选机号overlay]
   lua[复制脚本到SD]
   calib[台架标定]
+  export[export机号param]
   stick[固飞横滚差动确认]
-  download --> flash --> init --> reboot1 --> param --> lua --> calib --> stick
+  download --> flash --> init --> reboot1 --> param --> ac --> lua --> calib --> export --> stick
 ```
