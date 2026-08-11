@@ -3,7 +3,7 @@
 -- In STABILIZE / MANUAL:
 --   - Overrides left/right tilt PWM around per-side HORIZ (equivalent aileron)
 --   - On enter FW: ramps tilt from current/TRIM to HORIZ at Q_TILT_RATE_DN
---     (falls back to Q_TILT_RATE_UP if DN is 0); differential only after level
+--     (falls back to Q_TILT_RATE_UP if DN is 0); differential active during ramp
 --   - Overrides ThrottleLeft/Right from RC throttle (+ yaw differential)
 --     so stock BiCopter motors SHUT_DOWN / twin-mix fight does not zero S11/S12
 -- On leave FW (e.g. to QSTABILIZE):
@@ -309,13 +309,14 @@ local function update_tilt(entering_fw)
 
   local at_level = math.abs(cur_l - horiz_l) <= RAMP_EPS_PWM
     and math.abs(cur_r - horiz_r) <= RAMP_EPS_PWM
-  local delta = 0
   if at_level then
     cur_l = horiz_l
     cur_r = horiz_r
-    local roll = roll_demand() * rev
-    delta = roll * travel * gain
   end
+
+  -- Differential from enter FW (including ramp); centerline is cur_* toward HORIZ
+  local roll = roll_demand() * rev
+  local delta = roll * travel * gain
 
   -- Left roll (+roll with REV=1): both PWM down; left less AoA, right (mirrored) more AoA
   local pwm_l = math.floor(cur_l - delta + 0.5)
