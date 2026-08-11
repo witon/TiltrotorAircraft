@@ -78,7 +78,7 @@ python scripts/export-aircraft-calib.py --port COMx --aircraft 01
 
 | 类别 | 关键项 |
 |------|--------|
-| 机架 | `Q_ENABLE=1`，`Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`，`Q_TILT_MASK=3`，`Q_ASSIST_SPEED=-1`（关闭固飞空速辅助；有空速计且需要辅助时再改为略高于失速的正值），`SCHED_LOOP_RATE=300`（QuadPlane 要求 ≥100） |
+| 机架 | `Q_ENABLE=1`，`Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`，`Q_TILT_MASK=3`，`Q_TILT_RATE_UP=90`，`Q_TILT_RATE_DN=90`（约 1 s 过渡），`Q_ASSIST_SPEED=-1`（关闭固飞空速辅助；有空速计且需要辅助时再改为略高于失速的正值），`SCHED_LOOP_RATE=300`（QuadPlane 要求 ≥100） |
 | 姿态 | `AHRS_ORIENTATION=16` |
 | CRSF | `BRD_ALT_CONFIG=1`，`SERIAL7_PROTOCOL=23` |
 | 脚本 | `SCR_ENABLE=1` |
@@ -147,7 +147,7 @@ python scripts/upload-lua.py --port COMx
 
 ### 需标定参数一览
 
-项目 param 中倾转 / `BTILT_*` / 升降舵端点为占位，须台架改写后再飞。倾转端点与 `BTILT_HORIZ_*` 标定完成后用 `export-aircraft-calib.py` 按机号入库（见 §2.3）。悬停 PID、过渡速率等保持默认，试飞后再调（见 §6）。
+项目 param 中倾转 / `BTILT_*` / 升降舵端点为占位，须台架改写后再飞。倾转端点与 `BTILT_HORIZ_*` 标定完成后用 `export-aircraft-calib.py` 按机号入库（见 §2.3）。悬停 PID 保持默认，试飞后再调；过渡速率见 §6（约 1 s）。
 
 **地面（台架前）：**
 
@@ -229,7 +229,7 @@ ArduPilot 将 `FLTMODE_CH` PWM 划成六段；本机按低/中/高三段垫档�
 - Lua 固飞滚转带宽低于源码补丁；增益宁低勿高。
 - 脚本未加载、报错或覆写超时 → 倾转回到固件锁定位（**MIN**，双侧略低于水平）；固飞油门也会失去直通。起飞前确认 GCS 有 BTILT 运行消息。
 - 低速 / 应急：用**形态开关**切回垂起（`QSTABILIZE`）。勿在低速切固飞并停在 `MANUAL` 当应急。
-- 悬停 PID、过渡速率（`Q_TILT_RATE_*`）等保持默认，试飞后再调；本仓库不提供精调值。去固飞用 `Q_TILT_RATE_DN`（回退 UP）；回垂起移交用 `Q_TILT_RATE_UP`。
+- 悬停 PID 保持默认，试飞后再调。过渡速率项目 param 已设 `Q_TILT_RATE_UP=90`、`Q_TILT_RATE_DN=90`（°/s），使 TRIM↔HORIZ 约 90° 行程约 **1 s**；若实机角行程偏差可再微调。去固飞用 `Q_TILT_RATE_DN`（回退 UP）；回垂起移交用 `Q_TILT_RATE_UP`。
 
 ## 7. 推荐顺序小结
 
