@@ -79,6 +79,7 @@ python scripts/export-aircraft-calib.py --port COMx --aircraft 01
 | 类别 | 关键项 |
 |------|--------|
 | 机架 | `Q_ENABLE=1`，`Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`，`Q_TILT_MASK=3`，`Q_TILT_RATE_UP=90`，`Q_TILT_RATE_DN=90`（约 1 s 过渡），`Q_ASSIST_SPEED=-1`（关闭固飞空速辅助；有空速计且需要辅助时再改为略高于失速的正值），`SCHED_LOOP_RATE=300`（QuadPlane 要求 ≥100） |
+| 垂起姿态限幅 | `Q_OPTIONS=16384`（bit14：Q 模式忽略固飞 `PTCH_LIM_*` / `ROLL_LIMIT_DEG`），`Q_ANGLE_MAX=4500`（Plane 4.6：百分度，4500=45°；更新固件若只有 `Q_A_ANGLE_MAX` 则写度数值 45）。勿指望抬高 `PTCH_LIM_*` 来放大垂起杆量——固飞限幅应保持独立 |
 | 姿态 | `AHRS_ORIENTATION=16` |
 | CRSF | `BRD_ALT_CONFIG=1`，`SERIAL7_PROTOCOL=23` |
 | 脚本 | `SCR_ENABLE=1` |
@@ -118,7 +119,7 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_HORIZ_L` | 1200 | 左倾转真水平 PWM（固飞中心） |
 | `BTILT_HORIZ_R` | 1200 | 右倾转真水平 PWM（固飞中心） |
 | `BTILT_TRAVEL` | 100 | 满杆时相对 HORIZ 的单侧最大偏置（µs） |
-| `BTILT_GAIN` | 0.3 | 倾转差动增益 0..1（由低到高试） |
+| `BTILT_GAIN` | 0.12 | 倾转差动增益 0..1（由低到高试） |
 | `BTILT_REV` | 1 | 倾转横滚符号：`1` 或 `-1`，反了改符号 |
 | `BTILT_THR` | 1 | `1` 固飞油门直通 S11/S12；`0` 仅倾转 |
 | `BTILT_YAWDT` | 0.1 | 固飞偏航差动增益 -1..1（负号反转；约等于 `RUDD_DT_GAIN` 量级） |
@@ -168,7 +169,7 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_HORIZ_L` / `BTILT_HORIZ_R` | 1200 | 固飞杆回中：左右外段各自与中段齐平（介于 MIN 与 TRIM） |
 | `BTILT_REV` | 1 | 左滚 → 左减迎角、右增迎角；反了改为 `-1` |
 | `BTILT_TRAVEL` | 100 | 满杆相对 HORIZ 的单侧最大偏置（µs） |
-| `BTILT_GAIN` | 0.3 | 差动增益 0..1；由低到高试 |
+| `BTILT_GAIN` | 0.12 | 差动增益 0..1；由低到高试 |
 | `SERVO7_MIN` / `TRIM` / `MAX` | 1000 / 1500 / 2000 | 平尾行程端点与中立 |
 | `SERVO7_REVERSED` | 0 | 固飞俯仰方向正确 |
 | `SERVO11_REVERSED` / `SERVO12_REVERSED` | 0 | 对转方向按机身要求 |
@@ -180,8 +181,19 @@ python scripts/upload-lua.py --port COMx
 
 1. 模式切 **QSTABILIZE**：倾转应到垂直附近（TRIM）。
 2. 必要时改 `SERVO5/6_REVERSED`，使左右外段同向、电机轴朝上。
-3. 调 `SERVO5/6_TRIM` 到垂直中心；`MAX` 到垂起后仰极限（与 `Q_TILT_YAW_ANGLE` 一致）。
+3. 调 `SERVO5/6_TRIM` 到垂直中心；`MAX` 到垂起后仰极限（与 `Q_TILT_YAW_ANGLE` 一致）。**TRIM 勿贴死在 MIN 或 MAX**：垂直两侧都要留出俯仰/偏航矢量行程，否则大倾角时一侧顶死、杆量纠正不回。
 4. 切 **MANUAL** / **STABILIZE**（固飞）：在脚本接管前/失效时固件会把输出拉向 **MIN**。先把 `MIN` 设在「略低于水平」的机械极限。
+
+### 4.1.1 垂起俯仰权威与大倾角排查（拆桨）
+
+垂起俯仰靠**左右倾转对称矢量**（不是平尾主控）；稳态 `QSTABILIZE` 下 Lua 不覆写倾转。默认若不设 `Q_OPTIONS` bit14，Q 模式俯仰目标会被固飞 `PTCH_LIM_MAX_DEG` / `PTCH_LIM_MIN_DEG` 卡住（本仓库 init 约为 +20° / −25°），满杆 DesPitch 上不去，大倾角后易饱和发散。
+
+上传项目 param 后确认飞控上有 `Q_OPTIONS=16384`、`Q_ANGLE_MAX=4500`（Plane 4.6；若参数表为 `Q_A_ANGLE_MAX` 则应为 45），然后：
+
+1. **QSTABILIZE**、杆回中：S5/S6 在 TRIM（垂直）。
+2. 慢打俯仰满杆（左右应**同向**偏转）：Mission Planner **DesPitch** 应能到约 **±45°**（仍卡在 ~20° 说明 bit14 / `Q_ANGLE_MAX` 未生效，重新写参并重启）。
+3. 看 S5/S6 PWM：双向都有足够、大致对称的行程；一侧几乎不动或很快顶死 → 按 §4.1 重标 `SERVO5/6_*`，并令 `Q_TILT_YAW_ANGLE` 与 MAX 侧后仰角一致。机号 overlay（如 [`params/aircraft/01.param`](../params/aircraft/01.param)）若 TRIM 贴边，优先重标后再 `export-aircraft-calib.py`。
+4. 仍发散时再调倾转主导轴：`Q_A_RAT_PIT_FF`（及必要时 P）；勿先靠加大升降舵混控救垂起俯仰。
 
 ### 4.2 固飞水平与差动（Lua）
 
@@ -230,6 +242,7 @@ ArduPilot 将 `FLTMODE_CH` PWM 划成六段；本机按低/中/高三段垫档�
 - 脚本未加载、报错或覆写超时 → 倾转回到固件锁定位（**MIN**，双侧略低于水平）；固飞油门也会失去直通。起飞前确认 GCS 有 BTILT 运行消息。
 - 低速 / 应急：用**形态开关**切回垂起（`QSTABILIZE`）。勿在低速切固飞并停在 `MANUAL` 当应急。
 - 悬停 PID 保持默认，试飞后再调。过渡速率项目 param 已设 `Q_TILT_RATE_UP=90`、`Q_TILT_RATE_DN=90`（°/s），使 TRIM↔HORIZ 约 90° 行程约 **1 s**；若实机角行程偏差可再微调。去固飞用 `Q_TILT_RATE_DN`（回退 UP）；回垂起移交用 `Q_TILT_RATE_UP`。
+- 垂起大俯仰后杆量纠正不回：先查 DesPitch 是否被 `PTCH_LIM_*` 卡住（应用 `Q_OPTIONS` bit14 + `Q_ANGLE_MAX=4500`），再查倾转 PWM 是否饱和 / TRIM 是否贴边（见 §4.1.1）。
 
 ## 7. 推荐顺序小结
 

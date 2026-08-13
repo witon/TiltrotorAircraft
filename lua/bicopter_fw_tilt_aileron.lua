@@ -55,7 +55,7 @@ local PARAM_TABLE_PREFIX = 'BTILT_'
 assert(param:add_table(PARAM_TABLE_KEY, PARAM_TABLE_PREFIX, 4), 'BTILT: add_table 89 failed')
 assert(param:add_param(PARAM_TABLE_KEY, 1, 'HORIZ_L', 1200), 'BTILT: HORIZ_L')
 assert(param:add_param(PARAM_TABLE_KEY, 2, 'TRAVEL', 100), 'BTILT: TRAVEL')
-assert(param:add_param(PARAM_TABLE_KEY, 3, 'GAIN', 0.3), 'BTILT: GAIN')
+assert(param:add_param(PARAM_TABLE_KEY, 3, 'GAIN', 0.12), 'BTILT: GAIN')
 assert(param:add_param(PARAM_TABLE_KEY, 4, 'REV', 1), 'BTILT: REV')
 
 assert(param:add_table(PARAM_TABLE_KEY_THR, PARAM_TABLE_PREFIX, 2), 'BTILT: add_table 100 failed')
