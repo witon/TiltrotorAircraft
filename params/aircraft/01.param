@@ -24,3 +24,8 @@ Q_TILT_YAW_ANGLE,15
 BTILT_HORIZ_L,2000
 BTILT_HORIZ_R,1090
 BTILT_GAIN,0.12
+
+# Lua VTOL tail (requires bicopter_fw_tilt_aileron.lua)
+# Bench: rear motor was reversed at REV=1; GAIN 0.3 too weak (~120µs).
+BPIT_REV,-1
+BPIT_GAIN,0.7

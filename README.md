@@ -8,7 +8,7 @@
 - 刷写验证清单：[docs/flash-verify-checklist.md](docs/flash-verify-checklist.md)
 - ArduPilot 设置（参数 / Lua / 标定）：[docs/ardupilot-setup.md](docs/ardupilot-setup.md)
 - 参数：全量 [params/init.param](params/init.param)（含 `Q_ENABLE=1`，重启后）→ [params/matek-h743-mini-bicopter.param](params/matek-h743-mini-bicopter.param)；增量仅后者；实机倾转标定 overlay：[params/aircraft/](params/aircraft/)
-- 飞控 Lua（固飞差动倾转）：[lua/bicopter_fw_tilt_aileron.lua](lua/bicopter_fw_tilt_aileron.lua)
+- 飞控 Lua（固飞差动倾转 / 固飞油门 / 垂起尾桨俯仰）：[lua/bicopter_fw_tilt_aileron.lua](lua/bicopter_fw_tilt_aileron.lua)
 
 ## 本机工具（`scripts/`）
 

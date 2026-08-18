@@ -1,4 +1,5 @@
 -- BiCopter fixed-wing differential tilt + FW throttle passthrough
+-- + VTOL bidirectional tail-rotor pitch assist
 --
 -- In STABILIZE / MANUAL:
 --   - Overrides left/right tilt PWM around per-side HORIZ (equivalent aileron)
@@ -6,14 +7,17 @@
 --     (falls back to Q_TILT_RATE_UP if DN is 0); differential active during ramp
 --   - Overrides ThrottleLeft/Right from RC throttle (+ yaw differential)
 --     so stock BiCopter motors SHUT_DOWN / twin-mix fight does not zero S11/S12
+--   - Tail rotor held at SERVO TRIM (stopped)
 -- On leave FW (e.g. to QSTABILIZE):
 --   - Ramps tilt from last FW PWM to SERVO TRIM at Q_TILT_RATE_UP, then
 --     releases so stock VTOL owns tilt (avoids stock snap to MIN below level)
 --   - Throttle override stops immediately on leave FW
--- Steady VTOL: stock firmware in control.
+--   - Tail rotor follows attitude-loop pitch (assists stock tilt vectoring)
+-- Steady VTOL: stock firmware owns tilt/throttle; script owns tail rotor only.
 --
 -- Deploy: copy to APM/scripts/ on the FC SD card. Requires SCR_ENABLE=1.
--- Servo functions: 75/76 tilt (S5/S6), 73/74 throttle L/R (S11/S12).
+-- Servo functions: 75/76 tilt (S5/S6), 73/74 throttle L/R (S11/S12),
+--   94 Scripting1 tail (S8, bidirectional PWM ESC).
 --
 -- Script params (GCS):
 --   BTILT_HORIZ_L = left tilt PWM at true wing-level (FW center)
@@ -23,10 +27,16 @@
 --   BTILT_REV     = 1 or -1; tilt roll sign
 --   BTILT_THR     = 1 enable FW throttle override; 0 tilt-only
 --   BTILT_YAWDT   = yaw differential gain (-1..1; neg flips sign; ~0.1 like RUDD_DT)
+--   BPIT_ENABLE   = 1 enable VTOL tail; 0 off
+--   BPIT_GAIN     = 0..1 scale on tail travel
+--   BPIT_REV      = 1 or -1; tail pitch sign
+--   BPIT_TRAVEL   = max PWM offset from TRIM at full pitch (us)
 --
 -- Tilt sign (REV=1): left roll -> left wing decrease AoA, right increase AoA.
 -- Right servo is mirrored: both sides use the same PWM offset (horiz_n - delta).
 -- Yaw sign (YAWDT>0): right yaw stick -> left thrust up, right thrust down (Plane twin mix).
+-- Tail: BPIT_REV=-1 maps +pitch (nose up) to PWM below TRIM (this airframe:
+-- nose-up -> tail down). Flip REV if the thrust direction is wrong.
 
 local UPDATE_MS = 20
 local OVERRIDE_MS = 60
@@ -43,14 +53,19 @@ local K_TILT_RIGHT = 76
 local K_THR_LEFT = 73
 local K_THR_RIGHT = 74
 local K_AILERON = 4
+local K_SCRIPTING1 = 94
+local CONTROL_OUTPUT_PITCH = 2
+local PITCH_DEADZONE = 0.04
 
 -- Table key 89 (size 4): tilt params. Key 100 (size 2): FW throttle.
 -- Key 101 (size 1): right HORIZ (table 89 cannot expand past 4 slots).
--- ArduPilot cannot expand an existing table's slot count.
+-- Key 102 (size 4): VTOL tail pitch. ArduPilot cannot expand an existing table.
 local PARAM_TABLE_KEY = 89
 local PARAM_TABLE_KEY_THR = 100
 local PARAM_TABLE_KEY_HR = 101
+local PARAM_TABLE_KEY_PIT = 102
 local PARAM_TABLE_PREFIX = 'BTILT_'
+local PARAM_TABLE_PREFIX_PIT = 'BPIT_'
 
 assert(param:add_table(PARAM_TABLE_KEY, PARAM_TABLE_PREFIX, 4), 'BTILT: add_table 89 failed')
 assert(param:add_param(PARAM_TABLE_KEY, 1, 'HORIZ_L', 1200), 'BTILT: HORIZ_L')
@@ -65,6 +80,12 @@ assert(param:add_param(PARAM_TABLE_KEY_THR, 2, 'YAWDT', 0.1), 'BTILT: YAWDT')
 assert(param:add_table(PARAM_TABLE_KEY_HR, PARAM_TABLE_PREFIX, 1), 'BTILT: add_table 101 failed')
 assert(param:add_param(PARAM_TABLE_KEY_HR, 1, 'HORIZ_R', 1200), 'BTILT: HORIZ_R')
 
+assert(param:add_table(PARAM_TABLE_KEY_PIT, PARAM_TABLE_PREFIX_PIT, 4), 'BPIT: add_table 102 failed')
+assert(param:add_param(PARAM_TABLE_KEY_PIT, 1, 'ENABLE', 1), 'BPIT: ENABLE')
+assert(param:add_param(PARAM_TABLE_KEY_PIT, 2, 'GAIN', 0.7), 'BPIT: GAIN')
+assert(param:add_param(PARAM_TABLE_KEY_PIT, 3, 'REV', -1), 'BPIT: REV')
+assert(param:add_param(PARAM_TABLE_KEY_PIT, 4, 'TRAVEL', 400), 'BPIT: TRAVEL')
+
 local p_horiz_l = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ_L')
 local p_horiz_r = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ_R')
 local p_travel = Parameter(PARAM_TABLE_PREFIX .. 'TRAVEL')
@@ -72,6 +93,10 @@ local p_gain = Parameter(PARAM_TABLE_PREFIX .. 'GAIN')
 local p_rev = Parameter(PARAM_TABLE_PREFIX .. 'REV')
 local p_thr = Parameter(PARAM_TABLE_PREFIX .. 'THR')
 local p_yawdt = Parameter(PARAM_TABLE_PREFIX .. 'YAWDT')
+local p_bpit_enable = Parameter(PARAM_TABLE_PREFIX_PIT .. 'ENABLE')
+local p_bpit_gain = Parameter(PARAM_TABLE_PREFIX_PIT .. 'GAIN')
+local p_bpit_rev = Parameter(PARAM_TABLE_PREFIX_PIT .. 'REV')
+local p_bpit_travel = Parameter(PARAM_TABLE_PREFIX_PIT .. 'TRAVEL')
 
 local tilt_left_chan = SRV_Channels:find_channel(K_TILT_LEFT)
 local tilt_right_chan = SRV_Channels:find_channel(K_TILT_RIGHT)
@@ -86,6 +111,12 @@ local thr_right_chan = SRV_Channels:find_channel(K_THR_RIGHT)
 local thr_ok = thr_left_chan and thr_right_chan
 if not thr_ok then
   gcs:send_text(3, 'BTILT: missing SERVO fn 73/74 (tilt only)')
+end
+
+local tail_chan = SRV_Channels:find_channel(K_SCRIPTING1)
+local tail_ok = tail_chan
+if not tail_ok then
+  gcs:send_text(3, 'BPIT: missing SERVO fn 94 (no VTOL tail)')
 end
 
 -- RC map (1-based channel numbers)
@@ -132,6 +163,13 @@ end
 
 local tilt_left_trim = servo_lim(tilt_left_chan, 'TRIM', 1500)
 local tilt_right_trim = servo_lim(tilt_right_chan, 'TRIM', 1500)
+
+local tail_min, tail_trim, tail_max = 1000, 1500, 2000
+if tail_ok then
+  tail_min = servo_lim(tail_chan, 'MIN', 1000)
+  tail_trim = servo_lim(tail_chan, 'TRIM', 1500)
+  tail_max = servo_lim(tail_chan, 'MAX', 2000)
+end
 
 local p_tilt_rate_up = Parameter()
 local p_tilt_rate_dn = Parameter()
@@ -258,6 +296,24 @@ local function roll_demand()
     return clamp(scaled / 4500.0, -1.0, 1.0)
   end
   return stick_norm(roll_rc_chan)
+end
+
+-- Attitude-loop pitch in [-1, 1]. Prefer motors mixer input; else vehicle control output.
+-- Do not use RC stick: QSTABILIZE must still correct with stick centered.
+local function pitch_demand()
+  local ok, p = pcall(function()
+    return motors:get_pitch()
+  end)
+  if ok and p and type(p) == 'number' then
+    return clamp(p, -1.0, 1.0)
+  end
+  ok, p = pcall(function()
+    return vehicle:get_control_output(CONTROL_OUTPUT_PITCH)
+  end)
+  if ok and p and type(p) == 'number' then
+    return clamp(p, -1.0, 1.0)
+  end
+  return 0
 end
 
 local function is_armed()
@@ -396,6 +452,55 @@ local function update_throttle()
   SRV_Channels:set_output_pwm_chan_timeout(thr_right_chan, pwm_r, OVERRIDE_MS)
 end
 
+local function write_tail_pwm(pwm)
+  SRV_Channels:set_output_pwm_chan_timeout(tail_chan, pwm, OVERRIDE_MS)
+end
+
+-- Bidirectional tail: TRIM = stopped. FW / disarmed -> TRIM. ENABLE=0: no override.
+-- VTOL armed: TRIM + pitch * TRAVEL * GAIN * REV (REV=-1: +pitch -> PWM below TRIM).
+local function update_tail(in_fw)
+  if not tail_ok then
+    return
+  end
+
+  local en = p_bpit_enable:get()
+  if not en or en < 0.5 then
+    return
+  end
+
+  if in_fw or not is_armed() then
+    write_tail_pwm(tail_trim)
+    return
+  end
+
+  local gain = p_bpit_gain:get()
+  local rev = p_bpit_rev:get()
+  local travel = p_bpit_travel:get()
+  if not gain or not rev or not travel then
+    write_tail_pwm(tail_trim)
+    return
+  end
+
+  gain = clamp(gain, 0.0, 1.0)
+  if rev >= 0 then
+    rev = 1
+  else
+    rev = -1
+  end
+  if travel < 0 then
+    travel = 0
+  end
+
+  local pitch = pitch_demand()
+  if math.abs(pitch) < PITCH_DEADZONE then
+    pitch = 0
+  end
+
+  local pwm = math.floor(tail_trim + pitch * travel * gain * rev + 0.5)
+  pwm = clamp(pwm, tail_min, tail_max)
+  write_tail_pwm(pwm)
+end
+
 local function update()
   local mode = vehicle:get_mode()
   local in_fw = fw_mode(mode)
@@ -408,6 +513,7 @@ local function update()
     was_fw = true
     update_tilt(entering_fw)
     update_throttle()
+    update_tail(true)
     return update, UPDATE_MS
   end
 
@@ -423,8 +529,9 @@ local function update()
     update_recover_vtol()
   end
 
+  update_tail(false)
   return update, UPDATE_MS
 end
 
-gcs:send_text(6, 'BTILT: fw tilt+throttle running')
+gcs:send_text(6, 'BTILT: fw tilt+throttle+vtol tail running')
 return update, UPDATE_MS

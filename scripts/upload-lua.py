@@ -213,7 +213,7 @@ def main() -> int:
     if not args.no_reboot:
         reboot_board(master)
         print("Reboot commanded. Wait ~10s then reconnect in Mission Planner.")
-        print("GCS 应出现类似: BTILT: fw tilt+throttle running")
+        print("GCS 应出现类似: BTILT: fw tilt+throttle+vtol tail running")
     else:
         print("Skipped reboot. Reboot the flight controller to load the script.")
 

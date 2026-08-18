@@ -25,7 +25,7 @@ BRD_ALT_CONFIG,1
 SERIAL7_PROTOCOL,23
 SERIAL7_OPTIONS,0
 
-# --- Scripting (FW differential tilt Lua) ---
+# --- Scripting (FW differential tilt + VTOL pitch tail Lua) ---
 SCR_ENABLE,1
 
 # --- Flight modes on CH8 (EdgeTX mix: morph + FW mode switches) ---
@@ -60,7 +60,14 @@ SERVO7_TRIM,1500
 SERVO7_MAX,2000
 SERVO7_REVERSED,0
 
-# S11 / S12 motors (PWM ESC; do not put ESC on S5–S8)
+# S8 VTOL pitch tail (bidirectional PWM ESC; same timer group as S7 ~50 Hz; no DShot)
+SERVO8_FUNCTION,94
+SERVO8_MIN,1000
+SERVO8_TRIM,1500
+SERVO8_MAX,2000
+SERVO8_REVERSED,0
+
+# S11 / S12 main motors (PWM ESC; do not put main ESCs on S5–S8)
 SERVO11_FUNCTION,73
 SERVO11_MIN,1000
 SERVO11_TRIM,1000
@@ -72,9 +79,6 @@ SERVO12_MIN,1000
 SERVO12_TRIM,1000
 SERVO12_MAX,2000
 SERVO12_REVERSED,0
-
-# Unused side pads: leave disabled
-SERVO8_FUNCTION,0
 
 # --- Attitude-only: no external GPS/compass (H743-MINI has none onboard) ---
 # Allows arming QSTABILIZE / STABILIZE / MANUAL without home/GPS/compass.
