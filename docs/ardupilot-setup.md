@@ -127,12 +127,13 @@ python scripts/upload-lua.py --port COMx
 | `BPIT_GAIN` | 0.7 | 尾桨行程增益 0..1（由低到高试） |
 | `BPIT_REV` | -1 | 尾桨俯仰符号：`1` 或 `-1`，反了改符号 |
 | `BPIT_TRAVEL` | 400 | 满俯仰相对 `SERVO8_TRIM` 的最大偏置（µs） |
+| `BPIT_TFF` | 0.3 | 固飞→垂起扫角起点的低头前馈 0..1（`0` 关；与姿态环交叉淡入，起点忽略环路抬头） |
 
 脚本在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门，并把 S8 钉在 `SERVO8_TRIM`（尾桨停转）。固飞 → **`QSTABILIZE`** 时短暂接管倾转移交；垂起稳态不覆写倾转/主机油门，但覆写 S8 跟随姿态环俯仰。
 
-`QSTABILIZE` → 固飞时，脚本按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）将倾转从当前角渐进扫到 `BTILT_HORIZ_*`，扫角期间即可差动，到位后中心钉在 `BTILT_HORIZ_*` 继续差动；不再瞬间跳到水平。固飞 → `QSTABILIZE` 时，脚本按 `Q_TILT_RATE_UP` 从上一帧固飞 PWM 渐进扫到 `SERVO*_TRIM`，并与固件约 90° 过渡等时后再松手，避免 stock 瞬时落到 **MIN**（水平以下）；油门覆写在离开固飞时立即停止。进入固飞时尾桨立即写 `SERVO8_TRIM`（停转，无淡出）。
+`QSTABILIZE` → 固飞时，脚本按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）将倾转从当前角渐进扫到 `BTILT_HORIZ_*`，扫角期间即可差动，到位后中心钉在 `BTILT_HORIZ_*` 继续差动；不再瞬间跳到水平。固飞 → `QSTABILIZE` 时，脚本按 `Q_TILT_RATE_UP` 从上一帧固飞 PWM 渐进扫到 `SERVO*_TRIM`，并与固件约 90° 过渡等时后再松手，避免 stock 瞬时落到 **MIN**（水平以下）；油门覆写在离开固飞时立即停止；扫角期间尾桨为 `loop×(1−remain) − TFF×remain`：刚切垂起时只出低头前馈（姿态环抬头压不过去），倾转到垂直后只跟环。进入固飞时尾桨立即写 `SERVO8_TRIM`（停转，无淡出）。
 
-`BTILT_THR` / `BTILT_YAWDT` 使用独立脚本表键 100；`BTILT_HORIZ_R` 使用表键 101；`BPIT_*` 使用表键 102（与倾转表键 89 分开；ArduPilot 不能扩大已有表的槽位数）。旧版 `BTILT_HORIZ` 升级后可忽略，台架时把原值抄到 L/R。
+`BTILT_THR` / `BTILT_YAWDT` 使用独立脚本表键 100；`BTILT_HORIZ_R` 使用表键 101；`BPIT_ENABLE` / `GAIN` / `REV` / `TRAVEL` 使用表键 102；`BPIT_TFF` 使用表键 103（与倾转表键 89 分开；ArduPilot 不能扩大已有表的槽位数）。旧版 `BTILT_HORIZ` 升级后可忽略，台架时把原值抄到 L/R。
 
 ### 固飞油门不转（已知 BiCopter 路径）
 
@@ -182,6 +183,7 @@ python scripts/upload-lua.py --port COMx
 | `BPIT_REV` | -1 | 抬头 → 尾部向下推力；反了改为 `1` |
 | `BPIT_TRAVEL` | 400 | 满俯仰相对 TRIM 的最大偏置（µs） |
 | `BPIT_GAIN` | 0.7 | 尾桨增益 0..1；由低到高试 |
+| `BPIT_TFF` | 0.3 | 固飞→垂起扫角起点低头前馈（交叉淡入）；过猛低头则降，仍抬头则升；`0` 关 |
 | `SERVO11_REVERSED` / `SERVO12_REVERSED` | 0 | 对转方向按机身要求 |
 | `SERVO11/12_MIN` / `TRIM` / `MAX` | 1000 / 1000 / 2000 | 一般可沿用；电调校准区不同再微调 |
 
@@ -225,7 +227,8 @@ python scripts/upload-lua.py --port COMx
 2. **QSTABILIZE** 解锁、杆回中、机身水平：S8 接近 1500。
 3. 慢打俯仰：S8 向 1500 两侧动。抬头应对应尾部**向下**推力（压尾）；反了把 `BPIT_REV` 改号（本机默认 `-1`）。
 4. **STABILIZE** / **MANUAL**：打俯仰、推油门，S8 保持约 1500。
-5. `BPIT_GAIN` 从 0.7 左右往上试；过猛再降。`BPIT_ENABLE=0` 可临时关掉尾桨。
+5. **STABILIZE** → **QSTABILIZE**、杆回中：切档**第一帧**起 S8 就应偏到 TRIM **之上**（本机向下吹，默认 `TFF=0.3` 约 +84 µs），随后随扫角回到 ~1500。`BPIT_TFF=0` 则无此偏置。打一点抬头杆再切档，起点仍应向下吹（环路抬头被淡出）。
+6. `BPIT_GAIN` 从 0.7 左右往上试；过猛再降。`BPIT_ENABLE=0` 可临时关掉尾桨。试飞固飞→垂起若仍抬头则加大 `BPIT_TFF`，过猛低头则减小。
 
 ## 5. EdgeTX：形态 / 固飞模式 → CH8
 

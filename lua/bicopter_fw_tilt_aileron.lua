@@ -12,7 +12,8 @@
 --   - Ramps tilt from last FW PWM to SERVO TRIM at Q_TILT_RATE_UP, then
 --     releases so stock VTOL owns tilt (avoids stock snap to MIN below level)
 --   - Throttle override stops immediately on leave FW
---   - Tail rotor follows attitude-loop pitch (assists stock tilt vectoring)
+--   - Tail: crossfade loop vs BPIT_TFF. At HORIZ (remain=1) only nose-down
+--     FF; at TRIM (remain=0) only attitude-loop pitch. TFF=0 keeps full loop.
 -- Steady VTOL: stock firmware owns tilt/throttle; script owns tail rotor only.
 --
 -- Deploy: copy to APM/scripts/ on the FC SD card. Requires SCR_ENABLE=1.
@@ -31,12 +32,16 @@
 --   BPIT_GAIN     = 0..1 scale on tail travel
 --   BPIT_REV      = 1 or -1; tail pitch sign
 --   BPIT_TRAVEL   = max PWM offset from TRIM at full pitch (us)
+--   BPIT_TFF      = 0..1 nose-down FF at start of FW->VTOL recover (0 = off)
 --
 -- Tilt sign (REV=1): left roll -> left wing decrease AoA, right increase AoA.
 -- Right servo is mirrored: both sides use the same PWM offset (horiz_n - delta).
 -- Yaw sign (YAWDT>0): right yaw stick -> left thrust up, right thrust down (Plane twin mix).
 -- Tail: BPIT_REV=-1 maps +pitch (nose up) to PWM below TRIM (this airframe:
--- nose-up -> tail down). Flip REV if the thrust direction is wrong.
+-- nose-up -> tail down / blow up). During FW->VTOL recover, pitch is
+-- loop*(1-remain) - TFF*remain so the loop cannot command blow-up at t=0
+-- (more negative -> PWM above TRIM / blow down / nose down).
+-- Flip REV if the thrust direction is wrong.
 
 local UPDATE_MS = 20
 local OVERRIDE_MS = 60
@@ -59,11 +64,13 @@ local PITCH_DEADZONE = 0.04
 
 -- Table key 89 (size 4): tilt params. Key 100 (size 2): FW throttle.
 -- Key 101 (size 1): right HORIZ (table 89 cannot expand past 4 slots).
--- Key 102 (size 4): VTOL tail pitch. ArduPilot cannot expand an existing table.
+-- Key 102 (size 4): VTOL tail pitch. Key 103 (size 1): recover TFF.
+-- ArduPilot cannot expand an existing table.
 local PARAM_TABLE_KEY = 89
 local PARAM_TABLE_KEY_THR = 100
 local PARAM_TABLE_KEY_HR = 101
 local PARAM_TABLE_KEY_PIT = 102
+local PARAM_TABLE_KEY_TFF = 103
 local PARAM_TABLE_PREFIX = 'BTILT_'
 local PARAM_TABLE_PREFIX_PIT = 'BPIT_'
 
@@ -86,6 +93,9 @@ assert(param:add_param(PARAM_TABLE_KEY_PIT, 2, 'GAIN', 0.7), 'BPIT: GAIN')
 assert(param:add_param(PARAM_TABLE_KEY_PIT, 3, 'REV', -1), 'BPIT: REV')
 assert(param:add_param(PARAM_TABLE_KEY_PIT, 4, 'TRAVEL', 400), 'BPIT: TRAVEL')
 
+assert(param:add_table(PARAM_TABLE_KEY_TFF, PARAM_TABLE_PREFIX_PIT, 1), 'BPIT: add_table 103 failed')
+assert(param:add_param(PARAM_TABLE_KEY_TFF, 1, 'TFF', 0.3), 'BPIT: TFF')
+
 local p_horiz_l = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ_L')
 local p_horiz_r = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ_R')
 local p_travel = Parameter(PARAM_TABLE_PREFIX .. 'TRAVEL')
@@ -97,6 +107,7 @@ local p_bpit_enable = Parameter(PARAM_TABLE_PREFIX_PIT .. 'ENABLE')
 local p_bpit_gain = Parameter(PARAM_TABLE_PREFIX_PIT .. 'GAIN')
 local p_bpit_rev = Parameter(PARAM_TABLE_PREFIX_PIT .. 'REV')
 local p_bpit_travel = Parameter(PARAM_TABLE_PREFIX_PIT .. 'TRAVEL')
+local p_bpit_tff = Parameter(PARAM_TABLE_PREFIX_PIT .. 'TFF')
 
 local tilt_left_chan = SRV_Channels:find_channel(K_TILT_LEFT)
 local tilt_right_chan = SRV_Channels:find_channel(K_TILT_RIGHT)
@@ -180,6 +191,8 @@ local have_rate_dn = p_tilt_rate_dn:init('Q_TILT_RATE_DN')
 local was_fw = false
 local recovering_vtol = false
 local recover_t0_ms = 0
+-- Remaining tilt fraction to TRIM during FW->VTOL recover (1 at HORIZ, 0 at TRIM)
+local recover_remain = 0
 local cur_l = tilt_left_trim
 local cur_r = tilt_right_trim
 local last_pwm_l = tilt_left_trim
@@ -395,6 +408,19 @@ local function update_recover_vtol()
     horiz_r = tilt_right_trim
   end
 
+  local span_l = math.abs(horiz_l - tilt_left_trim)
+  local span_r = math.abs(horiz_r - tilt_right_trim)
+  if span_l < 1 then
+    span_l = 1
+  end
+  if span_r < 1 then
+    span_r = 1
+  end
+  -- Remain from pre-step PWM so the first recover frame is ~1 (full TFF)
+  local remain_l = math.abs(cur_l - tilt_left_trim) / span_l
+  local remain_r = math.abs(cur_r - tilt_right_trim) / span_r
+  recover_remain = clamp(0.5 * (remain_l + remain_r), 0.0, 1.0)
+
   local rate = tilt_rate_up_dps()
   local step_l = ramp_max_step(tilt_left_trim, horiz_l, rate)
   local step_r = ramp_max_step(tilt_right_trim, horiz_r, rate)
@@ -415,6 +441,7 @@ local function update_recover_vtol()
   local elapsed = now_ms() - recover_t0_ms
   if at_trim and elapsed >= min_ms then
     recovering_vtol = false
+    recover_remain = 0
   end
 end
 
@@ -458,6 +485,7 @@ end
 
 -- Bidirectional tail: TRIM = stopped. FW / disarmed -> TRIM. ENABLE=0: no override.
 -- VTOL armed: TRIM + pitch * TRAVEL * GAIN * REV (REV=-1: +pitch -> PWM below TRIM).
+-- FW->VTOL recover with TFF>0: pitch = loop*(1-remain) - TFF*remain (t=0: only FF).
 local function update_tail(in_fw)
   if not tail_ok then
     return
@@ -491,10 +519,21 @@ local function update_tail(in_fw)
     travel = 0
   end
 
-  local pitch = pitch_demand()
-  if math.abs(pitch) < PITCH_DEADZONE then
-    pitch = 0
+  local loop = pitch_demand()
+  if math.abs(loop) < PITCH_DEADZONE then
+    loop = 0
   end
+
+  local pitch = loop
+  if recovering_vtol then
+    local tff = p_bpit_tff:get()
+    if tff and tff > 0 then
+      tff = clamp(tff, 0.0, 1.0)
+      -- remain=1: only nose-down FF (loop cannot blow up at switch instant)
+      pitch = loop * (1.0 - recover_remain) - tff * recover_remain
+    end
+  end
+  pitch = clamp(pitch, -1.0, 1.0)
 
   local pwm = math.floor(tail_trim + pitch * travel * gain * rev + 0.5)
   pwm = clamp(pwm, tail_min, tail_max)
@@ -508,6 +547,7 @@ local function update()
   if in_fw then
     if recovering_vtol then
       recovering_vtol = false
+      recover_remain = 0
     end
     local entering_fw = not was_fw
     was_fw = true
@@ -521,6 +561,7 @@ local function update()
     was_fw = false
     recovering_vtol = true
     recover_t0_ms = now_ms()
+    recover_remain = 1
     cur_l = last_pwm_l
     cur_r = last_pwm_r
   end

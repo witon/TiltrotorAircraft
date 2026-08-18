@@ -100,7 +100,7 @@ flowchart LR
 | 固飞模式开关：自稳 ↔ 纯手动 | **否**（仅固飞内换控制方式） |
 
 - **垂起 → 固飞**：形态开关切固飞 → 进入 `STABILIZE` 或 `MANUAL` → 前飞过渡；倾转由垂直工作区大行程扫向水平工作区（见 [hardware.md](./hardware.md) 倾转端点语义）。
-- **固飞 → 垂起**：形态开关切垂起 → 进入 `QSTABILIZE` → 后飞/悬停过渡。
+- **固飞 → 垂起**：形态开关切垂起 → 进入 `QSTABILIZE` → 后飞/悬停过渡。扫角起点尾桨只出低头前馈（`BPIT_TFF`），不跟姿态环抬头；倾转到垂直后交叉淡入环路。见 [ardupilot-setup.md](./ardupilot-setup.md) §3 / §4.4。
 
 倾转与各轴控制的设计意图、实机形态 / 差动滚转图示、以及固飞 Lua 差动倾转约定，见 [hardware.md](./hardware.md)；刷参与脚本部署见 [ardupilot-setup.md](./ardupilot-setup.md)。本文只定模式与开关体系。
 
