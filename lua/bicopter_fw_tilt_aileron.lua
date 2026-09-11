@@ -1,5 +1,5 @@
 -- BiCopter fixed-wing differential tilt + FW throttle passthrough
--- + VTOL bidirectional tail-rotor pitch assist
+-- + VTOL tail-rotor (forward-only half of bidirectional ESC)
 --
 -- In STABILIZE / MANUAL:
 --   - Overrides left/right tilt PWM around per-side HORIZ (equivalent aileron)
@@ -15,10 +15,12 @@
 --   - Tail: crossfade loop vs BPIT_TFF. At HORIZ (remain=1) only nose-down
 --     FF; at TRIM (remain=0) only attitude-loop pitch. TFF=0 keeps full loop.
 -- Steady VTOL: stock firmware owns tilt/throttle; script owns tail rotor only.
+--   Armed: idle above TRIM + throttle toward MAX, then pitch overlay.
+--   PWM never below TRIM (forward only). Disarmed / FW: TRIM (stopped).
 --
 -- Deploy: copy to APM/scripts/ on the FC SD card. Requires SCR_ENABLE=1.
 -- Servo functions: 75/76 tilt (S5/S6), 73/74 throttle L/R (S11/S12),
---   94 Scripting1 tail (S8, bidirectional PWM ESC).
+--   94 Scripting1 tail (S8, bidirectional PWM ESC, forward half only).
 --
 -- Script params (GCS):
 --   BTILT_HORIZ_L = left tilt PWM at true wing-level (FW center)
@@ -31,16 +33,17 @@
 --   BPIT_ENABLE   = 1 enable VTOL tail; 0 off
 --   BPIT_GAIN     = 0..1 scale on tail travel
 --   BPIT_REV      = 1 or -1; tail pitch sign
---   BPIT_TRAVEL   = max PWM offset from TRIM at full pitch (us)
+--   BPIT_TRAVEL   = max PWM offset from throttle baseline at full pitch (us)
 --   BPIT_TFF      = 0..1 nose-down FF at start of FW->VTOL recover (0 = off)
+--   BPIT_IDLE     = 0..1 idle fraction of TRIM->MAX when VTOL armed
 --
 -- Tilt sign (REV=1): left roll -> left wing decrease AoA, right increase AoA.
 -- Right servo is mirrored: both sides use the same PWM offset (horiz_n - delta).
 -- Yaw sign (YAWDT>0): right yaw stick -> left thrust up, right thrust down (Plane twin mix).
--- Tail: BPIT_REV=-1 maps +pitch (nose up) to PWM below TRIM (this airframe:
--- nose-up -> tail down / blow up). During FW->VTOL recover, pitch is
--- loop*(1-remain) - TFF*remain so the loop cannot command blow-up at t=0
--- (more negative -> PWM above TRIM / blow down / nose down).
+-- Tail: BPIT_REV=-1 maps +pitch (nose up) toward TRIM (reduce forward; this
+-- airframe: less blow-down). PWM is never below TRIM. During FW->VTOL recover,
+-- pitch is loop*(1-remain) - TFF*remain so the loop cannot command blow-up at
+-- t=0 (more negative -> PWM further above TRIM / blow down / nose down).
 -- Flip REV if the thrust direction is wrong.
 
 local UPDATE_MS = 20
@@ -65,12 +68,13 @@ local PITCH_DEADZONE = 0.04
 -- Table key 89 (size 4): tilt params. Key 100 (size 2): FW throttle.
 -- Key 101 (size 1): right HORIZ (table 89 cannot expand past 4 slots).
 -- Key 102 (size 4): VTOL tail pitch. Key 103 (size 1): recover TFF.
--- ArduPilot cannot expand an existing table.
+-- Key 104 (size 1): VTOL tail idle. ArduPilot cannot expand an existing table.
 local PARAM_TABLE_KEY = 89
 local PARAM_TABLE_KEY_THR = 100
 local PARAM_TABLE_KEY_HR = 101
 local PARAM_TABLE_KEY_PIT = 102
 local PARAM_TABLE_KEY_TFF = 103
+local PARAM_TABLE_KEY_IDLE = 104
 local PARAM_TABLE_PREFIX = 'BTILT_'
 local PARAM_TABLE_PREFIX_PIT = 'BPIT_'
 
@@ -96,6 +100,9 @@ assert(param:add_param(PARAM_TABLE_KEY_PIT, 4, 'TRAVEL', 400), 'BPIT: TRAVEL')
 assert(param:add_table(PARAM_TABLE_KEY_TFF, PARAM_TABLE_PREFIX_PIT, 1), 'BPIT: add_table 103 failed')
 assert(param:add_param(PARAM_TABLE_KEY_TFF, 1, 'TFF', 0.3), 'BPIT: TFF')
 
+assert(param:add_table(PARAM_TABLE_KEY_IDLE, PARAM_TABLE_PREFIX_PIT, 1), 'BPIT: add_table 104 failed')
+assert(param:add_param(PARAM_TABLE_KEY_IDLE, 1, 'IDLE', 0.1), 'BPIT: IDLE')
+
 local p_horiz_l = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ_L')
 local p_horiz_r = Parameter(PARAM_TABLE_PREFIX .. 'HORIZ_R')
 local p_travel = Parameter(PARAM_TABLE_PREFIX .. 'TRAVEL')
@@ -108,6 +115,7 @@ local p_bpit_gain = Parameter(PARAM_TABLE_PREFIX_PIT .. 'GAIN')
 local p_bpit_rev = Parameter(PARAM_TABLE_PREFIX_PIT .. 'REV')
 local p_bpit_travel = Parameter(PARAM_TABLE_PREFIX_PIT .. 'TRAVEL')
 local p_bpit_tff = Parameter(PARAM_TABLE_PREFIX_PIT .. 'TFF')
+local p_bpit_idle = Parameter(PARAM_TABLE_PREFIX_PIT .. 'IDLE')
 
 local tilt_left_chan = SRV_Channels:find_channel(K_TILT_LEFT)
 local tilt_right_chan = SRV_Channels:find_channel(K_TILT_RIGHT)
@@ -300,6 +308,17 @@ local function throttle_norm()
   return clamp(norm, 0.0, 1.0)
 end
 
+-- VTOL collective 0..1. Prefer motors mixer throttle; else RC stick.
+local function vtol_throttle_norm()
+  local ok, t = pcall(function()
+    return motors:get_throttle()
+  end)
+  if ok and t and type(t) == 'number' then
+    return clamp(t, 0.0, 1.0)
+  end
+  return throttle_norm()
+end
+
 -- Normalized roll in [-1, 1]. Prefer mixer aileron scaled output; else RC stick.
 local function roll_demand()
   local ok, scaled = pcall(function()
@@ -483,8 +502,8 @@ local function write_tail_pwm(pwm)
   SRV_Channels:set_output_pwm_chan_timeout(tail_chan, pwm, OVERRIDE_MS)
 end
 
--- Bidirectional tail: TRIM = stopped. FW / disarmed -> TRIM. ENABLE=0: no override.
--- VTOL armed: TRIM + pitch * TRAVEL * GAIN * REV (REV=-1: +pitch -> PWM below TRIM).
+-- Forward-only tail: TRIM = stopped. FW / disarmed -> TRIM. ENABLE=0: no override.
+-- VTOL armed: idle + throttle*(MAX-idle) + pitch*TRAVEL*GAIN*REV, clamped [TRIM, MAX].
 -- FW->VTOL recover with TFF>0: pitch = loop*(1-remain) - TFF*remain (t=0: only FF).
 local function update_tail(in_fw)
   if not tail_ok then
@@ -519,6 +538,12 @@ local function update_tail(in_fw)
     travel = 0
   end
 
+  local idle = p_bpit_idle:get()
+  if not idle then
+    idle = 0.1
+  end
+  idle = clamp(idle, 0.0, 1.0)
+
   local loop = pitch_demand()
   if math.abs(loop) < PITCH_DEADZONE then
     loop = 0
@@ -535,8 +560,14 @@ local function update_tail(in_fw)
   end
   pitch = clamp(pitch, -1.0, 1.0)
 
-  local pwm = math.floor(tail_trim + pitch * travel * gain * rev + 0.5)
-  pwm = clamp(pwm, tail_min, tail_max)
+  local fwd = tail_max - tail_trim
+  if fwd < 0 then
+    fwd = 0
+  end
+  local idle_pwm = tail_trim + idle * fwd
+  local base = idle_pwm + vtol_throttle_norm() * (tail_max - idle_pwm)
+  local pwm = math.floor(base + pitch * travel * gain * rev + 0.5)
+  pwm = clamp(pwm, tail_trim, tail_max)
   write_tail_pwm(pwm)
 end
 
