@@ -93,9 +93,9 @@ assert(param:add_param(PARAM_TABLE_KEY_HR, 1, 'HORIZ_R', 1200), 'BTILT: HORIZ_R'
 
 assert(param:add_table(PARAM_TABLE_KEY_PIT, PARAM_TABLE_PREFIX_PIT, 4), 'BPIT: add_table 102 failed')
 assert(param:add_param(PARAM_TABLE_KEY_PIT, 1, 'ENABLE', 1), 'BPIT: ENABLE')
-assert(param:add_param(PARAM_TABLE_KEY_PIT, 2, 'GAIN', 0.7), 'BPIT: GAIN')
+assert(param:add_param(PARAM_TABLE_KEY_PIT, 2, 'GAIN', 1), 'BPIT: GAIN')
 assert(param:add_param(PARAM_TABLE_KEY_PIT, 3, 'REV', -1), 'BPIT: REV')
-assert(param:add_param(PARAM_TABLE_KEY_PIT, 4, 'TRAVEL', 400), 'BPIT: TRAVEL')
+assert(param:add_param(PARAM_TABLE_KEY_PIT, 4, 'TRAVEL', 500), 'BPIT: TRAVEL')
 
 assert(param:add_table(PARAM_TABLE_KEY_TFF, PARAM_TABLE_PREFIX_PIT, 1), 'BPIT: add_table 103 failed')
 assert(param:add_param(PARAM_TABLE_KEY_TFF, 1, 'TFF', 0.3), 'BPIT: TFF')
