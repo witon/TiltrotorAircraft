@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Upload a Lua script to an ArduPilot board via MAVFTP.
 
-Puts the file under APM/scripts/ (created if missing), warns if SCR_ENABLE is
-not 1, then reboots so scripting reloads the script (use --no-reboot to skip).
+Puts the file under APM/scripts/ (created if missing), removes Lua files that
+belong to other --config ids, warns if SCR_ENABLE is not 1, then reboots so
+scripting reloads (use --no-reboot to skip).
 """
 
 from __future__ import annotations
@@ -15,8 +16,13 @@ from pathlib import Path
 from pymavlink import mavutil
 from pymavlink.mavftp import FtpError, MAVFTP
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SCRIPT = REPO_ROOT / "lua" / "bicopter_fw_tilt_aileron.lua"
+from config_catalog import (
+    DEFAULT_CONFIG_ID,
+    format_config_list,
+    load_config,
+    other_lua_remote_names,
+)
+
 DEFAULT_REMOTE_DIR = "APM/scripts"
 PUT_TIMEOUT_S = 60.0
 
@@ -61,6 +67,20 @@ def reboot_board(master) -> None:
         0,
     )
     time.sleep(1.0)
+
+
+def remove_remote_file(ftp: MAVFTP, remote_path: str) -> bool:
+    print(f"Removing other config script: {remote_path}")
+    ret = ftp.cmd_rm([remote_path])
+    if ret.error_code in (FtpError.Success, FtpError.FileNotFound):
+        if ret.error_code == FtpError.FileNotFound:
+            print(f"  not present: {remote_path}")
+        else:
+            print(f"  removed: {remote_path}")
+        return True
+    ret.display_message()
+    print(f"RM FAIL: {remote_path} (error={ret.error_code})")
+    return False
 
 
 def mkdir_ok(ret) -> bool:
@@ -159,10 +179,20 @@ def main() -> int:
     )
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument(
+        "--config",
+        default=DEFAULT_CONFIG_ID,
+        help=f"Airframe config id under params/configs/ (default: {DEFAULT_CONFIG_ID})",
+    )
+    parser.add_argument(
+        "--list-configs",
+        action="store_true",
+        help="Print known configs and exit",
+    )
+    parser.add_argument(
         "--script",
         type=Path,
-        default=DEFAULT_SCRIPT,
-        help=f"Local .lua file (default: {DEFAULT_SCRIPT.name})",
+        default=None,
+        help="Override local .lua file (default: the config's lua)",
     )
     parser.add_argument(
         "--remote-dir",
@@ -176,7 +206,27 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    script = args.script.resolve()
+    if args.list_configs:
+        print("Known configs:")
+        print(format_config_list())
+        return 0
+
+    try:
+        cfg = load_config(args.config)
+    except (FileNotFoundError, ValueError) as exc:
+        print(exc)
+        return 1
+
+    if args.script is not None:
+        script = args.script.resolve()
+    elif cfg.lua is not None:
+        script = cfg.lua
+    else:
+        print(f"Config {cfg.config_id} has no lua; pass --script or pick another --config")
+        return 1
+
+    print(f"Config: {cfg.config_id} ({cfg.title})")
+
     if not script.is_file():
         print(f"Script not found: {script}")
         return 1
@@ -185,6 +235,11 @@ def main() -> int:
 
     remote_dir = args.remote_dir.replace("\\", "/").rstrip("/")
     remote_path = f"{remote_dir}/{script.name}"
+    stale = [
+        f"{remote_dir}/{name}"
+        for name in other_lua_remote_names(cfg)
+        if name != script.name
+    ]
 
     master = connect(args.port, args.baud)
     if master is None:
@@ -205,6 +260,10 @@ def main() -> int:
     if not ensure_remote_dirs(ftp, remote_dir):
         return 2
 
+    for stale_path in stale:
+        if not remove_remote_file(ftp, stale_path):
+            return 2
+
     if not upload_file(ftp, script, remote_path):
         return 2
 
@@ -213,7 +272,10 @@ def main() -> int:
     if not args.no_reboot:
         reboot_board(master)
         print("Reboot commanded. Wait ~10s then reconnect in Mission Planner.")
-        print("GCS 应出现类似: BTILT: fw tilt+throttle+vtol tail running")
+        if cfg.config_id == "tilttri":
+            print("GCS 应出现类似: BTILT: tilttri fw differential tilt running")
+        else:
+            print("GCS 应出现类似: BTILT: fw tilt+throttle+vtol tail running")
     else:
         print("Skipped reboot. Reboot the flight controller to load the script.")
 

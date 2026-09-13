@@ -1,7 +1,7 @@
 # Factory-default snapshot (reset FC export) with Q_ENABLE=1 for full upload.
 # Filtered via ArduPlane apm.pdef.json: dropped Volatile / ReadOnly / Calibration.
 # Regenerate filter: python scripts/filter-init-params.py
-# Full: upload this, reboot (Q_* appear), then matek-h743-mini-bicopter.param.
+# Full: upload this, reboot (Q_* appear), then params/configs/<id>/project.param.
 # See docs/ardupilot-setup.md
 ACRO_LOCKING,0
 ACRO_PITCH_RATE,180

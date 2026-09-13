@@ -1,0 +1,3 @@
+# Aircraft overlays moved to params/configs/<id>/aircraft/NN.param
+# Use: python scripts/upload-params.py --config bicopter --aircraft 01
+# Do not reuse bicopter calib files with --config tilttri.

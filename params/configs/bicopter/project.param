@@ -1,0 +1,100 @@
+# Matek H743-MINI V3 — TiltrotorAircraft BiCopter (ArduPlane)
+# Config id: bicopter
+# Incremental: upload this alone (Q_* must already exist).
+# Full: init.param, reboot, then this file (upload-params.py --config bicopter --mode full).
+# SERVO5/6 endpoints and BTILT_HORIZ_* below are placeholders; per-airframe calib in
+# params/configs/bicopter/aircraft/NN.param (--aircraft NN).
+# See docs/ardupilot-setup.md
+
+# --- QuadPlane / BiCopter ---
+Q_ENABLE,1
+Q_TILT_ENABLE,1
+Q_FRAME_CLASS,10
+Q_TILT_TYPE,3
+Q_TILT_MASK,3
+Q_TILT_YAW_ANGLE,15
+Q_TILT_RATE_UP,90
+Q_TILT_RATE_DN,90
+Q_ASSIST_SPEED,-1
+Q_OPTIONS,16384
+Q_ANGLE_MAX,4500
+Q_M_PWM_TYPE,0
+SCHED_LOOP_RATE,300
+
+# --- AHRS mount (cabin vertical, USB up, arrow forward = Roll90) ---
+AHRS_ORIENTATION,16
+
+# --- CRSF on SERIAL7 (RX6/TX6), MatekH743 ---
+BRD_ALT_CONFIG,1
+SERIAL7_PROTOCOL,23
+SERIAL7_OPTIONS,0
+
+# --- Scripting (FW differential tilt + VTOL pitch tail Lua) ---
+SCR_ENABLE,1
+
+# --- Flight modes on CH8 (EdgeTX mix: morph + FW mode switches) ---
+# Pad by low/mid/high bands (not 17/2/0 twice): mid ~1425/~1500 -> FLTMODE3/4.
+FLTMODE_CH,8
+FLTMODE1,17
+FLTMODE2,17
+FLTMODE3,2
+FLTMODE4,2
+FLTMODE5,0
+FLTMODE6,0
+
+# --- Servo outputs (H743-MINI V3 side pads S5–S8, S11–S12) ---
+# S5 tilt left — MIN below level, TRIM vertical, MAX past-vertical yaw; reversed for physical servo
+SERVO5_FUNCTION,75
+SERVO5_MIN,1100
+SERVO5_TRIM,1500
+SERVO5_MAX,2000
+SERVO5_REVERSED,1
+
+# S6 tilt right
+SERVO6_FUNCTION,76
+SERVO6_MIN,1100
+SERVO6_TRIM,1500
+SERVO6_MAX,2000
+SERVO6_REVERSED,0
+
+# S7 elevator
+SERVO7_FUNCTION,19
+SERVO7_MIN,1000
+SERVO7_TRIM,1500
+SERVO7_MAX,2000
+SERVO7_REVERSED,0
+
+# S8 VTOL pitch tail (bidirectional PWM ESC; same timer group as S7 ~50 Hz; no DShot)
+SERVO8_FUNCTION,94
+SERVO8_MIN,1000
+SERVO8_TRIM,1500
+SERVO8_MAX,2000
+SERVO8_REVERSED,0
+
+# S11 / S12 main motors (PWM ESC; do not put main ESCs on S5–S8)
+SERVO11_FUNCTION,73
+SERVO11_MIN,1000
+SERVO11_TRIM,1000
+SERVO11_MAX,2000
+SERVO11_REVERSED,0
+
+SERVO12_FUNCTION,74
+SERVO12_MIN,1000
+SERVO12_TRIM,1000
+SERVO12_MAX,2000
+SERVO12_REVERSED,0
+
+# --- Attitude-only: no external GPS/compass (H743-MINI has none onboard) ---
+# Allows arming QSTABILIZE / STABILIZE / MANUAL without home/GPS/compass.
+# Do not use position modes (AUTO/RTL/QLOITER/QRTL). Restore GPS+compass later if needed.
+# Plane 4.6: ARMING_CHECK bitmask (all checks except Compass+GPS). Plane 4.7+: use ARMING_SKIPCHK=12 instead.
+COMPASS_ENABLE,0
+GPS1_TYPE,0
+AHRS_GPS_USE,0
+EK3_SRC1_POSXY,0
+EK3_SRC1_VELXY,0
+EK3_SRC1_VELZ,0
+EK3_SRC1_YAW,0
+ARMING_CHECK,1048562
+# ArmOrDisarm: throttle low + rudder right to arm, left to disarm
+ARMING_RUDDER,2

@@ -1,0 +1,25 @@
+# Aircraft 01 — tilt servo + FW level (config: tilttri)
+# Mechanical MIN/MAX/TRIM copied from bicopter 01. TYPE=2 ignores TRIM as
+# "up"; it interpolates MIN↔MAX (Q_TILT_YAW_ANGLE past 90° = scaled 0).
+# REVERSED is flipped vs bicopter so QSTABILIZE lands near TRIM (vertical)
+# and fully-fwd near the below-level end. Do not reuse bicopter overlay as-is.
+# Upload: upload-params.py --config tilttri --aircraft 01
+
+# S5 TiltMotorLeft (FUNCTION 75) — bicopter was REVERSED=1
+SERVO5_MIN,950
+SERVO5_TRIM,1150
+SERVO5_MAX,2200
+SERVO5_REVERSED,0
+
+# S6 TiltMotorRight (FUNCTION 76) — bicopter was REVERSED=0
+SERVO6_MIN,950
+SERVO6_TRIM,1950
+SERVO6_MAX,2200
+SERVO6_REVERSED,1
+
+Q_TILT_YAW_ANGLE,15
+
+# Lua FW level (same PWM as bicopter 01; tilttri Lua still uses these)
+BTILT_HORIZ_L,2000
+BTILT_HORIZ_R,1090
+BTILT_GAIN,0.12

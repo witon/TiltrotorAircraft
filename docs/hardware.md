@@ -1,6 +1,13 @@
 # 硬件构型与接线
 
-本机为 **双旋翼倾转翼（BiCopter / Tilt-Wing）**：外段主翼与电机一体倾转。飞控 **Matek H743-MINI V3**（ArduPlane），遥控 RadioMaster **Zorro**（ELRS）+ **ER6GV**（CRSF）。执行机构全部由飞控 PWM 驱动；接收机不直驱舵机/电调。
+本机为 **双旋翼倾转翼（Tilt-Wing）**：外段主翼与电机一体倾转。飞控 **Matek H743-MINI V3**（ArduPlane），遥控 RadioMaster **Zorro**（ELRS）+ **ER6GV**（CRSF）。执行机构全部由飞控 PWM 驱动；接收机不直驱舵机/电调。
+
+固件侧有两套配置（焊盘不变，功能号不同），用 `--config` 选择，见 [ardupilot-setup.md](./ardupilot-setup.md)：
+
+| `--config` | 机架 | 尾电机 |
+|------------|------|--------|
+| `bicopter`（默认） | `Q_FRAME_CLASS=10` BiCopter | Lua 小桨（`FUNCTION=94`，双向电调） |
+| `tilttri` | `Q_FRAME_CLASS=7` Tilt-Tri + vectored yaw | 原生 Motor4（`FUNCTION=36`，单向电调） |
 
 说明：ArduPlane 文档中 BiCopter 的 “Tailsitter” 为历史命名，**不是**机尾着地 tailsitter。
 
@@ -9,8 +16,8 @@
 | 项目 | 配置 |
 |------|------|
 | 结构 | 中段固定；左右**外段与电机一体**倾转（翼上舵机经推杆驱动外段）；倾转同时改变该段迎角与推力线 |
-| 旋翼 | 左右各 1，**对转**；机尾另有 1 只固定朝上的小桨（双向电调，仅垂起俯仰） |
-| 尾翼 | 碳杆尾撑；平尾升降舵为唯一独立气动舵面；垂尾为固定安定面；尾撑上另装垂起俯仰小电机 |
+| 旋翼 | 左右各 1，**对转**；机尾另有 1 只桨轴固定朝上的电机（`bicopter`：小桨辅助俯仰；`tilttri`：等功率升力电机） |
+| 尾翼 | 碳杆尾撑；平尾升降舵为唯一独立气动舵面；垂尾为固定安定面；尾撑上另装垂起尾电机 |
 | 独立气动舵面 | **仅平尾升降舵** |
 | 无独立舵面 | 无副翼、无襟翼、无方向舵 |
 
@@ -26,15 +33,15 @@
 
 - **横滚（等效副翼）**：固飞时左右外段相对水平差动倾转 → 左右迎角差 → 滚转力矩（由 Lua 脚本覆写倾转 PWM；见下文）
 - **偏航（等效方向舵）**：左右电机差动推力
-- **俯仰**：固飞靠平尾升降舵；垂起靠倾转对称矢量 + 尾桨正转半区推力
+- **俯仰**：固飞靠平尾升降舵；垂起见下表（随构型）
 
 ### 各轴控制简表
 
-| 轴 | 悬停 | 固飞（设计意图） |
-|----|------|------------------|
-| 滚转 | 左右差动推力 | 外段相对水平差动倾转（等效副翼） |
-| 俯仰 | 对称倾转矢量 + 尾桨正转半区推力 | 平尾升降舵 |
-| 偏航 | 左右翼差动倾转矢量 | 左右电机差动推力（等效方向舵） |
+| 轴 | 悬停（bicopter） | 悬停（tilttri） | 固飞（设计意图） |
+|----|------------------|-----------------|------------------|
+| 滚转 | 左右差动推力 | 左右差动推力 | 外段相对水平差动倾转（等效副翼） |
+| 俯仰 | 对称倾转矢量 + 尾桨正转半区推力 | 前对 vs 尾 Motor4 差推力 | 平尾升降舵 |
+| 偏航 | 左右翼差动倾转矢量 | 左右翼差动倾转矢量（vectored yaw） | 左右电机差动推力（等效方向舵） |
 
 固飞向左滚转时的外段差动（实机）：左外段相对水平**减小迎角**（降升力），右外段**增大迎角**（升升力）→ 滚转力矩。与「固飞中心 = 水平、小行程上下差动」一致。
 
@@ -48,7 +55,7 @@
 | 右倾转舵机 | 右外段整翼倾转 | 同上 |
 | 平尾升降舵 | 固飞俯仰 | 唯一独立气动舵面 |
 | 左 / 右电调 + 电机 | 推力 | 对转；固飞可差动偏航 |
-| 尾桨电机 + 双向电调 | 垂起俯仰辅助 | 桨轴固定朝上；垂起解锁后正转（PWM ≥ 中位）；固飞 / 未解锁停转 |
+| 尾桨电机 + 电调 | 垂起俯仰 / 升力 | 桨轴固定朝上。`bicopter`：双向电调、Lua 正转半区。`tilttri`：单向电调、原生 Motor4 |
 
 ### 倾转端点语义（BiCopter）
 
@@ -94,6 +101,12 @@ stock 在非 VTOL 且已前倾到位（`fully_fwd`）时，左右倾转被锁在
 | MIN 语义 | 水平 | 水平以下极限 |
 | 是否改固件 | — | 否（官方 Plane + Scripting） |
 
+### 倾转端点语义（Tilt-Tri / vectored yaw）
+
+官方 `Q_TILT_TYPE=2`：scaled 0 = 越过垂直后仰，scaled 1000 = 朝前；**不用 TRIM 当垂起中心**（与 BiCopter 相反）。垂直约在 `Q_TILT_YAW_ANGLE/(90+YAW_ANGLE)`。01 号机把 bicopter 的 MIN/MAX 拷过来，并把左右 `REVERSED` 取反，使 QSTABILIZE 靠近原 TRIM。固飞横滚仍由 [`lua/tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) 绕 `BTILT_HORIZ_*` 差动；垂起倾转/三电机由固件混控，Lua **不**做 FW→VTOL recover。
+
+台架后把端点写入 [`params/configs/tilttri/aircraft/`](../params/configs/tilttri/aircraft/)，不要复用 bicopter 的机号文件。
+
 ## 飞控安装朝向
 
 舱内竖装（板面近平行机体纵向竖直面），开舱可从上插入 USB：
@@ -113,31 +126,35 @@ stock 在非 VTOL 且已前倾到位（`fully_fwd`）时，左右倾转被锁在
 
 ## 飞控输出映射
 
-物理通道号可变，**`SERVOn_FUNCTION` ID 不变**。
+物理通道号可变；**焊盘固定**，`SERVOn_FUNCTION` 随 `--config` 变化。
 
 H743-MINI **V3** 侧面焊盘为 S1–S8、S11、S12（**无 S9/S10**）。本机用侧面焊盘 **S5–S8 / S11–S12**，不用 JST 上的 S1–S4。
 
-| 飞控输出 | `SERVOn_FUNCTION` | 设备 |
-|----------|-------------------|------|
-| S5 | 75（TiltMotorLeft） | 左机翼倾转 |
-| S6 | 76（TiltMotorRight） | 右机翼倾转 |
-| S7 | 19（Elevator） | 平尾升降舵 |
-| S8 | 94（Scripting1） | 尾桨双向电调（仅垂起；脚本用正转半区） |
-| S11 | 73（ThrottleLeft） | 左电机 ESC 信号 |
-| S12 | 74（ThrottleRight） | 右电机 ESC 信号 |
+| 飞控输出 | 设备 | `bicopter` | `tilttri` |
+|----------|------|------------|-----------|
+| S5 | 左机翼倾转 | 75 TiltMotorLeft | 75 TiltMotorLeft |
+| S6 | 右机翼倾转 | 76 TiltMotorRight | 76 TiltMotorRight |
+| S7 | 平尾升降舵 | 19 Elevator | 19 Elevator |
+| S8 | 尾电机 ESC | 94 Scripting1 | 36 Motor4 |
+| S11 | 左电机 ESC | 73 ThrottleLeft | 34 Motor2（前左） |
+| S12 | 右电机 ESC | 74 ThrottleRight | 33 Motor1（前右） |
 
-固飞（`STABILIZE` / `MANUAL`）下推力由 [`bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 覆写 73/74（`BTILT_THR=1`），不依赖 stock 双发混控；垂起仍由固件电机库驱动左右主机。同一脚本在 `QSTABILIZE` 覆写 S8（`BPIT_ENABLE=1`）：解锁后正转怠速、跟油门，并叠加俯仰；PWM 不低于 `SERVO8_TRIM`。固飞钉在 `SERVO8_TRIM`（停转）。见 [ardupilot-setup.md](./ardupilot-setup.md) §3。
+**BiCopter：** 固飞推力由 [`bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 覆写 73/74（`BTILT_THR=1`）；`QSTABILIZE` 覆写 S8 尾桨。见 [ardupilot-setup.md](./ardupilot-setup.md) §3。
+
+**Tilt-Tri：** 三只电机由 QuadPlane 混控；Lua 只覆写固飞 S5/S6 差动。尾电调须改为**单向** PWM，`SERVO8_TRIM=1000`（停转在 MIN）。S8 仍与升降舵同组，约 50 Hz，勿开 DShot。
 
 约束：
 
-- 倾转 S5/S6 同定时器组；**主机**须用 S11/S12 单独一组。
-- **勿把主机电调接到 S5–S8**（与舵机混组会锁死低 PWM 频率）。
-- 尾桨电调接 **S8**（与 S7 升降舵同组 `7/8/9/10`），因此锁在舵机 PWM 频率（约 **50 Hz**）。用普通模拟 PWM 双向电调；**不要在 S8 开 DShot**。
+- 倾转 S5/S6 同定时器组；**左右主机**须用 S11/S12 单独一组。
+- **勿把左右主机电调接到 S5–S8**（与舵机混组会锁死低 PWM 频率）。Tilt-Tri 尾电机留在 S8 是刻意妥协（约 50 Hz）。
+- 尾电调接 **S8**（与 S7 升降舵同组 `7/8/9/10`），因此锁在舵机 PWM 频率（约 **50 Hz**）。**不要在 S8 开 DShot**；`Q_M_PWM_TYPE=0`。
 - MatekH743 定时器组：`1/2`，`3/4/5/6`，`7/8/9/10`，`11/12`，`13`。
 - 机翼舵机只映射倾转功能，勿再映射 `Aileron=4`。
 - 悬停阶段 ESC 信号类型为普通 PWM（非 DShot）。
 - 电调：信号线接对应 `Sn`，动力线接主电池；信号地与飞控共地。
-- 尾电调须设 3D/双向模式，中位约 1500 µs 停转；飞控脚本只用 ≥1500 的正转半区。若该电调有 BEC，不要把 5V 并到现有舵机轨。
+- **BiCopter** 尾电调须设 3D/双向模式，中位约 1500 µs 停转；飞控脚本只用 ≥1500 的正转半区。
+- **Tilt-Tri** 尾电调改为与主机相同的**单向** PWM；停转在 `SERVO8_MIN`/`TRIM`≈1000。
+- 若该电调有 BEC，不要把 5V 并到现有舵机轨。
 
 ## 遥控链路
 
@@ -247,10 +264,10 @@ flowchart LR
 - [ ] 飞控：`RX6`/`TX6` 交叉接妥；`BRD_ALT_CONFIG=1`，`SERIAL7_PROTOCOL=23`，已重启
 - [ ] Mission Planner 有 RC 输入；可选确认 CRSF 遥测
 - [ ] 仅一路 BEC 5V；舵机轨与接收机、飞控信号地共地
-- [ ] S5 / S6 / S7 / S8 / S11 / S12 与功能 75 / 76 / 19 / 94 / 73 / 74 一致
-- [ ] `SCR_ENABLE=1`；SD 卡 `APM/scripts/bicopter_fw_tilt_aileron.lua` 已部署；GCS 可见 `BTILT_*`（含 `BTILT_THR`）与 `BPIT_*`
-- [ ] 固飞模式台架：横滚杆 → 左右倾转差动；推油门 → S11/S12 PWM 上升；S8 钉在约 1500（尾电机不转）；固飞→垂起倾转平滑收到垂直（无先沉再竖）；垂起稳态倾转/油门不受脚本干扰
-- [ ] 垂起台架：`QSTABILIZE` 解锁、油门最低 → S8 ≈ 1550 慢转；推油门 → S8 上升；打俯仰 → S8 只在 1500–2000；锁定 / 固飞 → S8 ≈ 1500
+- [ ] S5 / S6 / S7 / S8 / S11 / S12 功能号与所选 `--config` 一致（见上表）
+- [ ] `SCR_ENABLE=1`；SD 上**只有**当前构型的 Lua（`upload-lua.py --config …` 会删掉另一份）
+- [ ] **bicopter：** GCS 见 `BTILT: fw tilt+throttle+vtol tail running`；固飞推油门 S11/S12 上升、S8≈1500；垂起解锁 S8 怠速正转
+- [ ] **tilttri：** GCS 见 `BTILT: tilttri fw differential tilt running`；固飞横滚差动倾转；垂起三电机混控；固飞尾电机停（MIN）
 
 ## 未记录规格
 

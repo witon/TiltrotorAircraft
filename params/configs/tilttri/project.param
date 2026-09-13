@@ -1,20 +1,26 @@
-# Matek H743-MINI V3 — TiltrotorAircraft BiCopter (ArduPlane)
-# Incremental: upload this alone (Q_* must already exist).
-# Full: upload init.param first, reboot, then this file (MP or upload-params.py --mode full).
-# SERVO5/6 endpoints and BTILT_HORIZ_* below are placeholders; per-airframe calib in
-# params/aircraft/NN.param (export-aircraft-calib.py; upload with --aircraft NN).
+# Matek H743-MINI V3 — TiltrotorAircraft Tilt-Tri vectored yaw (ArduPlane)
+# Config id: tilttri
+# Wiring unchanged from bicopter (S5–S8 / S11–S12). Tail ESC must be
+# unidirectional PWM (not 3D/bidirectional). S8 stays ~50 Hz; no DShot.
+# Full: upload-params.py --config tilttri --mode full
+# Then: upload-lua.py --config tilttri  (removes other config scripts)
+# SERVO5/6 endpoints and BTILT_HORIZ_* below are placeholders; calib in
+# params/configs/tilttri/aircraft/NN.param (--aircraft NN).
 # See docs/ardupilot-setup.md
 
-# --- QuadPlane / BiCopter ---
+# --- QuadPlane / Tilt-Tri ---
 Q_ENABLE,1
 Q_TILT_ENABLE,1
-Q_FRAME_CLASS,10
-Q_TILT_TYPE,3
+Q_FRAME_CLASS,7
+Q_TILT_TYPE,2
 Q_TILT_MASK,3
 Q_TILT_YAW_ANGLE,15
 Q_TILT_RATE_UP,90
 Q_TILT_RATE_DN,90
 Q_ASSIST_SPEED,-1
+Q_OPTIONS,16384
+Q_ANGLE_MAX,4500
+Q_M_PWM_TYPE,0
 SCHED_LOOP_RATE,300
 
 # --- AHRS mount (cabin vertical, USB up, arrow forward = Roll90) ---
@@ -25,7 +31,7 @@ BRD_ALT_CONFIG,1
 SERIAL7_PROTOCOL,23
 SERIAL7_OPTIONS,0
 
-# --- Scripting (FW differential tilt + VTOL pitch tail Lua) ---
+# --- Scripting (FW differential tilt Lua only; VTOL mixer owns motors) ---
 SCR_ENABLE,1
 
 # --- Flight modes on CH8 (EdgeTX mix: morph + FW mode switches) ---
@@ -38,8 +44,9 @@ FLTMODE4,2
 FLTMODE5,0
 FLTMODE6,0
 
-# --- Servo outputs (H743-MINI V3 side pads S5–S8, S11–S12) ---
-# S5 tilt left — MIN below level, TRIM vertical, MAX past-vertical yaw; reversed for physical servo
+# --- Servo outputs (same pads as bicopter; FUNCTION ids differ) ---
+# Vectored yaw: MANUAL = forward, QSTABILIZE = up; YAW_ANGLE = past-vertical.
+# S5 tilt left
 SERVO5_FUNCTION,75
 SERVO5_MIN,1100
 SERVO5_TRIM,1500
@@ -60,21 +67,21 @@ SERVO7_TRIM,1500
 SERVO7_MAX,2000
 SERVO7_REVERSED,0
 
-# S8 VTOL pitch tail (bidirectional PWM ESC; same timer group as S7 ~50 Hz; no DShot)
-SERVO8_FUNCTION,94
+# S8 Motor4 rear (unidirectional PWM ESC; same timer group as S7 ~50 Hz; no DShot)
+SERVO8_FUNCTION,36
 SERVO8_MIN,1000
-SERVO8_TRIM,1500
+SERVO8_TRIM,1000
 SERVO8_MAX,2000
 SERVO8_REVERSED,0
 
-# S11 / S12 main motors (PWM ESC; do not put main ESCs on S5–S8)
-SERVO11_FUNCTION,73
+# S11 Motor2 front left / S12 Motor1 front right (PWM ESC)
+SERVO11_FUNCTION,34
 SERVO11_MIN,1000
 SERVO11_TRIM,1000
 SERVO11_MAX,2000
 SERVO11_REVERSED,0
 
-SERVO12_FUNCTION,74
+SERVO12_FUNCTION,33
 SERVO12_MIN,1000
 SERVO12_TRIM,1000
 SERVO12_MAX,2000
