@@ -1,5 +1,5 @@
 -- BiCopter fixed-wing differential tilt + FW throttle passthrough
--- + VTOL tail-rotor (forward-only half of bidirectional ESC)
+-- + VTOL tail-rotor (unidirectional PWM ESC)
 --
 -- In STABILIZE / MANUAL:
 --   - Overrides left/right tilt PWM around per-side HORIZ (equivalent aileron)
@@ -16,11 +16,11 @@
 --     FF; at TRIM (remain=0) only attitude-loop pitch. TFF=0 keeps full loop.
 -- Steady VTOL: stock firmware owns tilt/throttle; script owns tail rotor only.
 --   Armed: idle above TRIM + throttle toward MAX, then pitch overlay.
---   PWM never below TRIM (forward only). Disarmed / FW: TRIM (stopped).
+--   PWM never below TRIM (stopped). Disarmed / FW: TRIM (stopped).
 --
 -- Deploy: copy to APM/scripts/ on the FC SD card. Requires SCR_ENABLE=1.
 -- Servo functions: 75/76 tilt (S5/S6), 73/74 throttle L/R (S11/S12),
---   94 Scripting1 tail (S8, bidirectional PWM ESC, forward half only).
+--   94 Scripting1 tail (S8, unidirectional PWM ESC; TRIM=MIN stop).
 --
 -- Script params (GCS):
 --   BTILT_HORIZ_L = left tilt PWM at true wing-level (FW center)
@@ -502,7 +502,7 @@ local function write_tail_pwm(pwm)
   SRV_Channels:set_output_pwm_chan_timeout(tail_chan, pwm, OVERRIDE_MS)
 end
 
--- Forward-only tail: TRIM = stopped. FW / disarmed -> TRIM. ENABLE=0: no override.
+-- Unidirectional tail: TRIM = stopped. FW / disarmed -> TRIM. ENABLE=0: no override.
 -- VTOL armed: idle + throttle*(MAX-idle) + pitch*TRAVEL*GAIN*REV, clamped [TRIM, MAX].
 -- FW->VTOL recover with TFF>0: pitch = loop*(1-remain) - TFF*remain (t=0: only FF).
 local function update_tail(in_fw)

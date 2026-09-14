@@ -108,8 +108,8 @@ python scripts/export-aircraft-calib.py --port COMx --config tilttri --aircraft 
 | 类别 | 关键项 |
 |------|--------|
 | 机架 | `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`，`Q_TILT_MASK=3`，`Q_TILT_RATE_UP/DN=90`，`Q_ASSIST_SPEED=-1`，`SCHED_LOOP_RATE=300` |
-| 输出 | S5=75，S6=76，S7=19，S8=**36**（Motor4，`MIN`/`TRIM=1500`），S11=**34**，S12=**33** |
-| 尾电调 | 与 bicopter 同一只 3D/双向；`MIN`/`TRIM=1500` 当单向；约 50 Hz |
+| 输出 | S5=75，S6=76，S7=19，S8=**36**（Motor4，`MIN`/`TRIM=1000`），S11=**34**，S12=**33** |
+| 尾电调 | 与 bicopter 同一只单向 PWM；停转在 MIN；约 50 Hz |
 
 `Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写，并用 §2.3 导出到**该构型**机号文件。本项目不做电池监测标定与罗盘校准。
 
@@ -153,9 +153,9 @@ python scripts/upload-lua.py --port COMx --config tilttri
 | `BPIT_REV` | -1 | 尾桨俯仰符号：`1` 或 `-1`，反了改符号 |
 | `BPIT_TRAVEL` | 500 | 满俯仰相对油门基线的最大偏置（µs） |
 | `BPIT_TFF` | 0.3 | 固飞→垂起扫角起点的低头前馈 0..1（`0` 关；与姿态环交叉淡入，起点忽略环路抬头） |
-| `BPIT_IDLE` | 0.1 | 垂起解锁怠速，占 `TRIM→MAX` 正转半区的比例（约等于主机 `Q_M_SPIN_ARM`） |
+| `BPIT_IDLE` | 0.1 | 垂起解锁怠速，占 `TRIM→MAX` 全行程的比例（约等于主机 `Q_M_SPIN_ARM`） |
 
-脚本在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门，并把 S8 钉在 `SERVO8_TRIM`（尾桨停转）。固飞 → **`QSTABILIZE`** 时短暂接管倾转移交；垂起稳态不覆写倾转/主机油门，但覆写 S8：解锁后在中位以上怠速正转，随油门增速，并叠加姿态环俯仰；PWM 不低于 `SERVO8_TRIM`。
+脚本在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门，并把 S8 钉在 `SERVO8_TRIM`（尾桨停转）。固飞 → **`QSTABILIZE`** 时短暂接管倾转移交；垂起稳态不覆写倾转/主机油门，但覆写 S8：解锁后在 TRIM 以上怠速正转，随油门增速，并叠加姿态环俯仰；PWM 不低于 `SERVO8_TRIM`。
 
 `QSTABILIZE` → 固飞时，脚本按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）将倾转从当前角渐进扫到 `BTILT_HORIZ_*`，扫角期间即可差动，到位后中心钉在 `BTILT_HORIZ_*` 继续差动；不再瞬间跳到水平。固飞 → `QSTABILIZE` 时，脚本按 `Q_TILT_RATE_UP` 从上一帧固飞 PWM 渐进扫到 `SERVO*_TRIM`，并与固件约 90° 过渡等时后再松手，避免 stock 瞬时落到 **MIN**（水平以下）；油门覆写在离开固飞时立即停止；扫角期间尾桨为油门基线加 `loop×(1−remain) − TFF×remain`：刚切垂起时只出低头前馈（姿态环抬头压不过去），倾转到垂直后只跟环。进入固飞时尾桨立即写 `SERVO8_TRIM`（停转，无淡出）。
 
@@ -165,10 +165,10 @@ python scripts/upload-lua.py --port COMx --config tilttri
 
 1. GCS 消息应出现类似：`BTILT: tilttri fw differential tilt running`。
 2. 参数表有 `BTILT_HORIZ_L/R`、`TRAVEL`、`GAIN`、`REV`；**无** `BPIT_*` / `BTILT_THR`（本脚本不注册）。
-3. `QSTABILIZE` 解锁：S8/S11/S12 由混控驱动（尾电机跟俯仰/油门；S8 在 1500 以上，不进反转区）。
-4. `MANUAL` / `STABILIZE` Arm：推油门 → S11/S12 应上升（QuadPlane 推力，Lua 不覆写电机）；S8 应在 MIN（1500）附近停转。
+3. `QSTABILIZE` 解锁：S8/S11/S12 由混控驱动（尾电机跟俯仰/油门；S8 在 1000 以上怠速）。
+4. `MANUAL` / `STABILIZE` Arm：推油门 → S11/S12 应上升（QuadPlane 推力，Lua 不覆写电机）；S8 应在 MIN（1000）附近停转。
 5. 固飞打横滚 → S5/S6 差动；垂起 Lua 不覆写倾转。
-6. 尾电调保持 3D/双向即可；`SERVO8_MIN`/`TRIM=1500` 把 Motor4 限制在正转半区。若 MIN 仍是 1000，油门最低会进反转区乱转。
+6. 尾电调为单向 PWM（非 3D）；`SERVO8_MIN`/`TRIM=1000`。若电调仍是双向且 MIN=1000，油门最低会进反转区乱转。
 
 ### 固飞油门不转（已知 BiCopter 路径）
 
@@ -183,7 +183,7 @@ python scripts/upload-lua.py --port COMx --config tilttri
 3. `MANUAL` Arm：推油门 → S11/S12 PWM 上升且电机转；回中停转。
 4. 固飞打偏航 → 左右油门差动；方向反了把 `BTILT_YAWDT` 设为负值。
 5. `QSTABILIZE` → 固飞扫角未结束时打横滚 → S5/S6 在扫角轨迹上应已见同号差动偏移。
-6. 固飞打俯仰 / 推油门 → S8 保持约 1500，尾电机不转。
+6. 固飞打俯仰 / 推油门 → S8 保持约 1000，尾电机不转。
 
 ## 4. 台架标定（拆桨）
 
@@ -213,7 +213,7 @@ python scripts/upload-lua.py --port COMx --config tilttri
 | `BTILT_GAIN` | 0.12 | 差动增益 0..1；由低到高试 |
 | `SERVO7_MIN` / `TRIM` / `MAX` | 1000 / 1500 / 2000 | 平尾行程端点与中立 |
 | `SERVO7_REVERSED` | 0 | 固飞俯仰方向正确 |
-| `SERVO8_MIN` / `TRIM` / `MAX` | 1000 / 1500 / 2000 | 尾桨双向电调；TRIM=停转；脚本下限钳在 TRIM |
+| `SERVO8_MIN` / `TRIM` / `MAX` | 1000 / 1000 / 2000 | 尾桨单向电调；TRIM=停转；脚本下限钳在 TRIM |
 | `BPIT_ENABLE` | 1 | 垂起尾桨；台架可先关再开 |
 | `BPIT_REV` | -1 | 抬头 → 减小正转（压向 TRIM）；反了改为 `1` |
 | `BPIT_TRAVEL` | 500 | 满俯仰相对油门基线的最大偏置（µs） |
@@ -234,7 +234,7 @@ python scripts/upload-lua.py --port COMx --config tilttri
 
 ### 4.1.1 垂起俯仰权威与大倾角排查（拆桨）
 
-垂起俯仰靠**左右倾转对称矢量**加 **S8 尾桨正转半区推力**（不是平尾主控）；稳态 `QSTABILIZE` 下 Lua 不覆写倾转，但覆写尾桨。默认若不设 `Q_OPTIONS` bit14，Q 模式俯仰目标会被固飞 `PTCH_LIM_MAX_DEG` / `PTCH_LIM_MIN_DEG` 卡住（本仓库 init 约为 +20° / −25°），满杆 DesPitch 上不去，大倾角后易饱和发散。
+垂起俯仰靠**左右倾转对称矢量**加 **S8 尾桨推力**（不是平尾主控）；稳态 `QSTABILIZE` 下 Lua 不覆写倾转，但覆写尾桨。默认若不设 `Q_OPTIONS` bit14，Q 模式俯仰目标会被固飞 `PTCH_LIM_MAX_DEG` / `PTCH_LIM_MIN_DEG` 卡住（本仓库 init 约为 +20° / −25°），满杆 DesPitch 上不去，大倾角后易饱和发散。
 
 上传项目 param 后确认飞控上有 `Q_OPTIONS=16384`、`Q_ANGLE_MAX=4500`（Plane 4.6；若参数表为 `Q_A_ANGLE_MAX` 则应为 45），然后：
 
@@ -257,21 +257,21 @@ python scripts/upload-lua.py --port COMx --config tilttri
 
 ### 4.4 垂起尾桨（S8，拆桨）
 
-尾桨桨轴固定朝上，双向电调中位停转；脚本只用正转半区（PWM ≥ `SERVO8_TRIM`）。垂起解锁后怠速正转，随油门增速，并叠加姿态环俯仰（不是只跟遥控杆），与倾转矢量并联。电调须为 3D/双向；S8 与升降舵同组，约 50 Hz PWM，勿开 DShot。
+尾桨桨轴固定朝上，单向 PWM 电调；停转在 `SERVO8_TRIM`（= MIN ≈ 1000 µs），脚本下限钳在 TRIM。垂起解锁后怠速正转，随油门增速，并叠加姿态环俯仰（不是只跟遥控杆），与倾转矢量并联。S8 与升降舵同组，约 50 Hz PWM，勿开 DShot。
 
-1. 锁定：S8 ≈ `SERVO8_TRIM`（1500），尾电机不转。
-2. **QSTABILIZE** 解锁、油门最低、机身水平：S8 ≈ 1550（`BPIT_IDLE=0.1`），尾电机慢转；怠速过快/不转则调 `BPIT_IDLE`。
-3. 推油门：S8 向 `SERVO8_MAX`（2000）上升，转速跟着升。慢打俯仰：S8 只在 1500–2000 内动，不出现低于中位。抬头应对应减小正转（压向 TRIM）；反了把 `BPIT_REV` 改号（本机默认 `-1`）。
-4. **STABILIZE** / **MANUAL**：打俯仰、推油门，S8 保持约 1500，尾电机不转。
-5. **STABILIZE** → **QSTABILIZE**、油门最低：切档后 S8 应在怠速之上再叠加低头前馈（本机向下吹，默认 `TFF=0.3` 约 +84 µs），随后随扫角回到怠速附近。`BPIT_TFF=0` 则无此偏置。打一点抬头杆再切档，起点仍应向下吹（环路抬头被淡出），且 PWM 仍 ≥ 1500。
+1. 锁定：S8 ≈ `SERVO8_TRIM`（1000），尾电机不转。
+2. **QSTABILIZE** 解锁、油门最低、机身水平：S8 ≈ 1100（`BPIT_IDLE=0.1`），尾电机慢转；怠速过快/不转则调 `BPIT_IDLE`。
+3. 推油门：S8 向 `SERVO8_MAX`（2000）上升，转速跟着升。慢打俯仰：S8 只在 1000–2000 内动，不低于 TRIM。抬头应对应减小正转（压向 TRIM）；反了把 `BPIT_REV` 改号（本机默认 `-1`）。
+4. **STABILIZE** / **MANUAL**：打俯仰、推油门，S8 保持约 1000，尾电机不转。
+5. **STABILIZE** → **QSTABILIZE**、油门最低：切档后 S8 应在怠速之上再叠加低头前馈（本机向下吹，默认 `TFF=0.3` 约 +84 µs），随后随扫角回到怠速附近。`BPIT_TFF=0` 则无此偏置。打一点抬头杆再切档，起点仍应向下吹（环路抬头被淡出），且 PWM 仍 ≥ TRIM（1000）。
 6. `BPIT_GAIN` 从 0.7 左右往上试；过猛再降。`BPIT_ENABLE=0` 可临时关掉尾桨。试飞固飞→垂起若仍抬头则加大 `BPIT_TFF`，过猛低头则减小。
 
 ### 4.5 Tilt-Tri 台架差异（`--config tilttri`）
 
 接线不变。与 bicopter 的差别：
 
-1. 尾电调保持 3D/双向（中位 ≈1500 µs 停转）；飞控用 `SERVO8_MIN`/`TRIM=1500` 当单向，不必改电调固件。
-2. `SERVO8_FUNCTION=36`，`SERVO8_MIN`/`TRIM=1500`。勿再找 `BPIT_*`。
+1. 尾电调为单向 PWM（非 3D）；停转在 MIN ≈ 1000 µs。勿再用双向电调。
+2. `SERVO8_FUNCTION=36`，`SERVO8_MIN`/`TRIM=1000`。勿再找 `BPIT_*`。
 3. **垂起倾转不看 `SERVO*_TRIM`。** BiCopter（`Q_TILT_TYPE=3`）垂起中心是 TRIM（01 号机左 1150 / 右 1950）。Tilt-Tri vectored yaw（`TYPE=2`）把 MIN↔MAX 当成「后仰极限 ↔ 水平以下」，垂直点在 `Q_TILT_YAW_ANGLE/(90+YAW_ANGLE)`。全量 tilttri 占位 1100/1500/2000 会让 QSTABILIZE 远离已标定垂直。01 号机 overlay 拷了 bicopter 的 MIN/MAX/TRIM，并把 **`SERVO5/6_REVERSED` 相对 bicopter 取反**，使 QSTABILIZE 落在 TRIM 附近。固飞仍由 Lua `BTILT_HORIZ_*`（01：左 2000 / 右 1090）覆写，所以换构型后固飞看起来仍对。
 4. **QSTABILIZE** 杆回中：倾转应接近 bicopter 的垂直 TRIM；三只电机混控。打俯仰应主要改变**尾 vs 前对**推力差。
 5. 固飞水平仍标 `BTILT_HORIZ_L/R`；Lua 不接管油门/尾电机。

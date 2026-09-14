@@ -64,10 +64,11 @@ SERVO7_TRIM,1500
 SERVO7_MAX,2000
 SERVO7_REVERSED,0
 
-# S8 VTOL pitch tail (bidirectional PWM ESC; same timer group as S7 ~50 Hz; no DShot)
+# S8 VTOL pitch tail (unidirectional PWM ESC; TRIM=MIN stop;
+# same timer group as S7 ~50 Hz; no DShot)
 SERVO8_FUNCTION,94
 SERVO8_MIN,1000
-SERVO8_TRIM,1500
+SERVO8_TRIM,1000
 SERVO8_MAX,2000
 SERVO8_REVERSED,0
 
