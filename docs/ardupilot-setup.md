@@ -89,6 +89,7 @@ python scripts/export-aircraft-calib.py --port COMx --config tilttri --aircraft 
 | 类别 | 关键项 |
 |------|--------|
 | 垂起姿态限幅 | `Q_OPTIONS=16384`（bit14：Q 模式忽略固飞 `PTCH_LIM_*` / `ROLL_LIMIT_DEG`），`Q_ANGLE_MAX=4500`（Plane 4.6：百分度，4500=45°） |
+| 垂起手感 | `Q_M_THST_EXPO=0.80`，`Q_M_SLEW_UP_TIME=0.8`，`Q_M_SPIN_MIN=0.12`，`Q_A_INPUT_TC=0.25`，`Q_A_ANG_RLL/PIT_P=3.5` |
 | 姿态 | `AHRS_ORIENTATION=16` |
 | CRSF | `BRD_ALT_CONFIG=1`，`SERIAL7_PROTOCOL=23` |
 | 脚本 | `SCR_ENABLE=1` |
@@ -312,10 +313,27 @@ ArduPilot 将 `FLTMODE_CH` PWM 划成六段；本机按低/中/高三段垫档�
 - Lua 固飞滚转带宽低于源码补丁；增益宁低勿高。
 - 脚本未加载、报错或覆写超时 → **bicopter** 倾转回到固件锁定位（**MIN**）；固飞油门也会失去直通；尾桨回到 `SERVO8_TRIM`（停转）。**tilttri** 仅失去固飞差动，垂起混控仍在。起飞前确认 GCS 有对应 BTILT 运行消息。
 - 低速 / 应急：用**形态开关**切回垂起（`QSTABILIZE`）。勿在低速切固飞并停在 `MANUAL` 当应急。
-- 悬停 PID 保持默认，试飞后再调。过渡速率项目 param 已设 `Q_TILT_RATE_UP=90`、`Q_TILT_RATE_DN=90`（°/s），使 TRIM↔HORIZ 约 90° 行程约 **1 s**；若实机角行程偏差可再微调。去固飞用 `Q_TILT_RATE_DN`（回退 UP）；回垂起移交用 `Q_TILT_RATE_UP`。
+- 悬停 PID 保持默认角度/速率环结构，试飞后再微调 D/FF。项目 param 已把**手感**放软：`Q_M_THST_EXPO=0.80`、`Q_M_SLEW_UP_TIME=0.8`、`Q_M_SPIN_MIN=0.12`（离地不那么窜），`Q_A_INPUT_TC=0.25`、`Q_A_ANG_RLL/PIT_P=3.5`（打舵不那么贼）。`Q_ANGLE_MAX` 仍为 45°，满杆改出能力保留。若怠速不跟转，把 `Q_M_SPIN_MIN` 改回 0.15。
+- 过渡速率项目 param 已设 `Q_TILT_RATE_UP=90`、`Q_TILT_RATE_DN=90`（°/s），使 TRIM↔HORIZ 约 90° 行程约 **1 s**；若实机角行程偏差可再微调。去固飞用 `Q_TILT_RATE_DN`（回退 UP）；回垂起移交用 `Q_TILT_RATE_UP`。
 - 垂起大俯仰后杆量纠正不回：先查 DesPitch 是否被 `PTCH_LIM_*` 卡住（应用 `Q_OPTIONS` bit14 + `Q_ANGLE_MAX=4500`），再查倾转 PWM 是否饱和 / TRIM 是否贴边（见 §4.1.1），并确认尾桨方向与 `BPIT_GAIN`（见 §4.4）。
 
-## 7. 推荐顺序小结
+## 7. 日志诊断（`analyze-log.py`）
+
+USB 连上飞控后，可把机上 `APM/LOGS/*.BIN` 拉下来，对照当前 `--config`（及可选机号 overlay）给出改参建议：解锁失败、Lua 是否加载、构型参数漂移、倾转占位、振动、姿态跟踪、S5/S6/S8/S11/S12 饱和等。
+
+```powershell
+# 列出机上日志
+python scripts/analyze-log.py --port COMx --list-logs
+# 下最新 1 条并分析（tilttri 1 号机）
+python scripts/analyze-log.py --port COMx --latest 1 --config tilttri --aircraft 01
+# 指定编号，或只分析已下载文件
+python scripts/analyze-log.py --port COMx --log-id 91 --config tilttri
+python scripts/analyze-log.py logs_download\00000091.BIN --config tilttri --aircraft 01
+```
+
+下载目录默认 `logs_download/`（不入库）。脚本只给建议，不会改飞控参数。无 GPS 时间戳的台架日志仍可分析 MSG/PARM/PWM。油门离地猛、打舵贼，会分别提示 `Q_M_SLEW_UP_TIME` / `Q_M_THST_EXPO` 与 `Q_A_INPUT_TC` / `Q_A_ANG_*_P`。
+
+## 8. 推荐顺序小结
 
 ```mermaid
 flowchart LR

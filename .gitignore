@@ -1,2 +1,5 @@
 # Downloaded ArduPilot parameter metadata (filter-init-params.py)
 params/apm.pdef.json
+
+# Onboard .BIN pulled for analyze-log.py
+logs_download/

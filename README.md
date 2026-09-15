@@ -44,4 +44,9 @@ python scripts/export-aircraft-calib.py --port COMx --config tilttri --aircraft 
 # 上传 Lua 到飞控 SD（APM/scripts/；会删除其它构型脚本；默认重启）
 python scripts/upload-lua.py --port COMx --config bicopter
 python scripts/upload-lua.py --port COMx --config tilttri
+
+# 分析飞控日志并给出改参建议（先 Disconnect Mission Planner）
+python scripts/analyze-log.py --port COMx --list-logs
+python scripts/analyze-log.py --port COMx --latest 1 --config tilttri --aircraft 01
+python scripts/analyze-log.py logs_download/00000091.BIN --config tilttri
 ```
