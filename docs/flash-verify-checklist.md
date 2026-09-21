@@ -6,7 +6,7 @@
 
 - [ ] 已安装 STM32CubeProgrammer（或 dfu-util + DFU 驱动）
 - [ ] 已安装 Mission Planner
-- [ ] 已下载固件：`.\scripts\download-matekh743-plane.ps1`
+- [ ] 已下载官方固件：`.\scripts\download-matekh743-plane.ps1`（tilttri 不等功率：`.\scripts\download-thstfac-plane.ps1`）
 - [ ] 飞控未接电池 / 外部 5V / GPS 等外设
 - [ ] USB 线可传数据
 
@@ -14,14 +14,14 @@
 
 - [ ] 按住 Boot 插 USB → STM32 BOOTLOADER / DFU
 - [ ] STM32CubeProgrammer 连接 DFU 成功
-- [ ] 烧录 `firmware/Plane/stable/MatekH743/arduplane_with_bl.hex`（`0x08000000`）无报错
+- [ ] 烧录官方 `firmware/Plane/stable/MatekH743/arduplane_with_bl.hex` 或自定义 `firmware/Plane/custom/MatekH743/arduplane_with_bl.hex`
 - [ ] 松开 Boot，重新正常插 USB 上电
 
 ## C. Mission Planner
 
 - [ ] 设备管理器出现 COM 口
 - [ ] 115200 连接成功
-- [ ] 显示 ArduPlane / MatekH743
+- [ ] 显示 ArduPlane / MatekH743（自定义应为 `V4.6.3-thstfac`）
 - [ ] 已记录固件版本
 
 | 项目 | 值 |

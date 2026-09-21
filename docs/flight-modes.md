@@ -59,8 +59,8 @@ flowchart TB
 
 | `--config` | 垂起（`QSTABILIZE` 解锁） | 固飞 |
 |------------|--------------------------|------|
-| `bicopter` | Lua 尾桨正转半区（PWM ≥ 中位，随油门增速） | 立即写中位停转 |
-| `tilttri` | 原生 Motor4 参与三旋翼混控 | 固件关断尾电机（停在 MIN） |
+| `bicopter` | Lua 尾桨全行程（PWM ≥ TRIM=MIN，随油门增速） | 立即写 TRIM 停转 |
+| `tilttri` | 原生 Motor4 参与三旋翼混控 | 固件关断尾电机（停在 MIN=1000） |
 
 ## 遥控器混控 → `FLTMODE_CH`
 

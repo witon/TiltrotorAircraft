@@ -13,16 +13,29 @@
 | 首次 DFU 刷写（含 bootloader） | `arduplane_with_bl.hex` | [Plane/stable/MatekH743](https://firmware.ardupilot.org/Plane/stable/MatekH743/) |
 | 已装 ArduPilot 后的升级 | `arduplane.apj` | 同上 |
 | 双向 DShot（可选） | `MatekH743-bdshot` 目录下对应文件 | [Plane/stable/MatekH743-bdshot](https://firmware.ardupilot.org/Plane/stable/MatekH743-bdshot/) |
+| tilttri 前后推力比（自定义） | `firmware/Plane/custom/MatekH743/arduplane.apj` | GitHub Actions 编译；`.\scripts\download-thstfac-plane.ps1` 下载 `V4.6.3-thstfac` |
 
-优先使用 **stable**；需要新特性再换 `latest`。确认固件含 **Scripting**（近年官方 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
+**bicopter** 与等功率 tilttri 用 **stable** 官方包即可。前对大电机 + 小尾桨的 tilttri 刷 **thstfac** 自定义包；GCS 版本须为 `ArduPlane V4.6.3-thstfac`。之后只改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`，不必再编译。不要用 Mission Planner 在线 MatekH743 Plane 覆盖这套固件。
 
-本地下载可用仓库脚本：
+本地下载官方包：
 
 ```powershell
 .\scripts\download-matekh743-plane.ps1
 ```
 
-固件会保存到 `firmware/Plane/stable/MatekH743/`。可选：`-Channel latest`、`-Bdshot`。
+自定义 thstfac（**在 GitHub 上编译**，本机不装 WSL）：
+
+1. 把含 `.github/workflows/build-matekh743-plane.yml` 的提交推到 GitHub。
+2. 打开仓库 **Actions** → **Build MatekH743 Plane** → **Run workflow**（补丁改动推送也会自动编）。约 20–40 分钟。
+3. 完成后滚动 Release 标签为 `firmware-thstfac`。本机下载：
+
+```powershell
+.\scripts\download-thstfac-plane.ps1
+```
+
+也可在该次 run 的 **Artifacts** 里下 `matekh743-plane-thstfac`。可选本机 WSL：`.\scripts\build-matekh743-plane.ps1`。
+
+官方包保存到 `firmware/Plane/stable/MatekH743/`。可选：`-Channel latest`、`-Bdshot`。自定义包保存到 `firmware/Plane/custom/MatekH743/`。
 
 ## 准备工具（Windows）
 
@@ -132,4 +145,5 @@ RC：默认可用 Rx6；CRSF/ELRS 等双向协议需 `BRD_ALT_CONFIG=1`，并将
 
 - 刷入 `with_bl.hex` 会写入 ArduPilot bootloader，后续主要走 ArduPilot 升级路径；若要切回 Betaflight / INAV，需再次 DFU 刷对应固件。
 - `MatekH743-bdshot` 会改变 Rx6 与部分 PWM 行为，使用前阅读官方 Warning。
+- 自定义 `V4.6.3-thstfac` 与官方 4.6.3 参数表不完全相同；换回官方固件后 `Q_M_THST_FRONT/REAR` 会消失，三旋翼混控回到等功率。
 - H7 偶发起机异常时，查阅官方文档 *When Problems Arise* 中 H7 相关说明。

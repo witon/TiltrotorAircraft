@@ -1,0 +1,126 @@
+# 在 GitHub 上编译 Plane-4.6.3-thstfac（MatekH743）。本机不必装 WSL。
+# 手动：Actions → Build MatekH743 Plane → Run workflow
+# 产物：Release tag firmware-thstfac，以及本 run 的 Artifact。
+name: Build MatekH743 Plane
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "firmware/patches/plane-4.6.3/**"
+      - "scripts/build-matekh743-plane.sh"
+      - ".github/workflows/build-matekh743-plane.yml"
+  pull_request:
+    paths:
+      - "firmware/patches/plane-4.6.3/**"
+      - "scripts/build-matekh743-plane.sh"
+      - ".github/workflows/build-matekh743-plane.yml"
+
+concurrency:
+  group: build-matekh743-plane-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mix-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: TRI mix scale sanity
+        run: python3 scripts/tri-thst-mix-check.py
+
+  build:
+    needs: mix-check
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      ARM_GCC: gcc-arm-none-eabi-10-2020-q4-major
+      ARM_GCC_URL: https://firmware.ardupilot.org/Tools/STM32-tools/gcc-arm-none-eabi-10-2020-q4-major-x86_64-linux.tar.bz2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git python3 python3-pip python3-setuptools python3-dev \
+            g++ ccache wget ca-certificates
+          python3 -m pip install --user empy==3.3.4 pexpect intelhex future lxml
+
+      - name: Cache ARM GCC tarball
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/${{ env.ARM_GCC }}.tar.bz2
+          key: ${{ env.ARM_GCC }}-linux-x64
+
+      - name: Install ARM GCC 10
+        run: |
+          TAR="${{ runner.temp }}/${ARM_GCC}.tar.bz2"
+          if [[ ! -s "$TAR" ]]; then
+            wget -q -O "$TAR" "$ARM_GCC_URL"
+          fi
+          sudo tar -C /opt -xjf "$TAR"
+          echo "/opt/${ARM_GCC}/bin" >> "$GITHUB_PATH"
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+
+      - name: Cache ArduPilot Plane-4.6.3 clone
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/TiltrotorAircraft
+          key: ardupilot-Plane-4.6.3-${{ hashFiles('firmware/patches/plane-4.6.3/**') }}
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-matekh743-${{ github.sha }}
+          restore-keys: |
+            ccache-matekh743-
+
+      - name: Build patched Plane
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          export CCACHE_DIR="$HOME/.ccache"
+          arm-none-eabi-gcc --version
+          python3 --version
+          bash scripts/build-matekh743-plane.sh
+          test -s firmware/Plane/custom/MatekH743/arduplane.apj
+          test -s firmware/Plane/custom/MatekH743/arduplane_with_bl.hex
+          cat firmware/Plane/custom/MatekH743/firmware-version.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: matekh743-plane-thstfac
+          path: |
+            firmware/Plane/custom/MatekH743/arduplane.apj
+            firmware/Plane/custom/MatekH743/arduplane_with_bl.hex
+            firmware/Plane/custom/MatekH743/arduplane.bin
+            firmware/Plane/custom/MatekH743/firmware-version.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish rolling Release firmware-thstfac
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: firmware-thstfac
+          name: ArduPlane V4.6.3-thstfac (MatekH743)
+          prerelease: true
+          make_latest: false
+          body: |
+            自定义 TRI 前后推力比固件（`ArduPlane V4.6.3-thstfac` / MatekH743）。
+
+            - 已装 ArduPilot：Mission Planner → **Load custom firmware** → `arduplane.apj`
+            - 首次 DFU：`arduplane_with_bl.hex`
+            - 不要用在线 MatekH743 Plane 列表覆盖，否则会丢掉 `Q_M_THST_FRONT/REAR`
+
+            本机下载：`.\scripts\download-thstfac-plane.ps1`
+          files: |
+            firmware/Plane/custom/MatekH743/arduplane.apj
+            firmware/Plane/custom/MatekH743/arduplane_with_bl.hex
+            firmware/Plane/custom/MatekH743/firmware-version.txt

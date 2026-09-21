@@ -5,23 +5,28 @@
 | `--config` | 机架 | Lua |
 |------------|------|-----|
 | `bicopter` | `Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`；Lua 固飞差动 + 油门直通 + 垂起尾桨 | [`bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) |
-| `tilttri` | `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`；尾电机 Motor4；Lua **只**固飞差动倾转 | [`tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) |
+| `tilttri` | `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`；尾电机 Motor4；Lua **只**固飞差动倾转。前后电机功率不同时用自编译 `V4.6.3-thstfac` 的 `Q_M_THST_FRONT` / `Q_M_THST_REAR` | [`tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) |
 
 切换构型必须 **`--mode full`** 并 `upload-lua.py --config …`（会删除 SD 上另一构型的脚本）。机号 overlay 按构型隔离，不要把 bicopter 的 `aircraft/01.param` 套到 tilttri。
 
-**不需要**自编译固件。首次 DFU / 本地固件下载见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)。
+等功率三旋翼仍可用官方 Plane。前对大电机 + 小尾桨的 tilttri 需要 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md) 里的 **V4.6.3-thstfac** 自定义固件（只编译一次；比例在地面站改参）。
 
-## 1. 刷官方固件
+## 1. 刷固件
 
 推荐按 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md) 操作（本地下载 + 首次 DFU）。摘要：
 
-1. 下载固件：
+1. 下载官方固件（bicopter / 等功率 tilttri）：
    ```powershell
    .\scripts\download-matekh743-plane.ps1
    ```
-2. **首次**：按住 Boot，用 STM32CubeProgrammer（或 dfu-util）烧写 `firmware/Plane/stable/MatekH743/arduplane_with_bl.hex`。
-3. **已装 ArduPilot 后升级**：Mission Planner → **Install Firmware** → Load custom firmware → `arduplane.apj`；或在线选 **MatekH743** → **Plane**。
-4. 确认固件含 **Scripting**（近年官方 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
+   不等功率 tilttri：在 GitHub Actions 编译后下载（本机不必装 WSL）：
+   ```powershell
+   .\scripts\download-thstfac-plane.ps1
+   ```
+   工作流：仓库 **Actions** → **Build MatekH743 Plane** → **Run workflow**。说明见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)。
+2. **首次**：按住 Boot，用 STM32CubeProgrammer（或 dfu-util）烧写 `firmware/Plane/stable/MatekH743/arduplane_with_bl.hex`（官方）或 `firmware/Plane/custom/MatekH743/arduplane_with_bl.hex`（thstfac）。
+3. **已装 ArduPilot 后升级**：Mission Planner → **Install Firmware** → Load custom firmware → 对应目录的 `arduplane.apj`。**tilttri 不等功率不要从在线列表选 MatekH743 Plane**，会盖掉 `THST_FRONT/REAR` 混控。
+4. 自定义固件 GCS 应显示 **ArduPlane V4.6.3-thstfac**。官方固件含 **Scripting**（近年 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
 5. 刷写完成后连接飞控（115200），不要急着装桨。验证清单：[flash-verify-checklist.md](./flash-verify-checklist.md)。
 
 ## 2. 导入参数
@@ -111,6 +116,7 @@ python scripts/export-aircraft-calib.py --port COMx --config tilttri --aircraft 
 | 机架 | `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`，`Q_TILT_MASK=3`，`Q_TILT_RATE_UP/DN=90`，`Q_ASSIST_SPEED=-1`，`SCHED_LOOP_RATE=300` |
 | 输出 | S5=75，S6=76，S7=19，S8=**36**（Motor4，`MIN`/`TRIM=1000`），S11=**34**，S12=**33** |
 | 尾电调 | 与 bicopter 同一只单向 PWM；停转在 MIN；约 50 Hz |
+| 前后推力比 | 需固件 `V4.6.3-thstfac`。`Q_M_THST_FRONT` / `Q_M_THST_REAR` 默认 1.0（等功率）。小尾桨先拆桨把 FRONT 降到约 0.6，尾桨若贴怠速且 S8 未到 MAX 再略升 REAR。标定写入 `aircraft/NN.param`，不必再编译。 |
 
 `Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写，并用 §2.3 导出到**该构型**机号文件。本项目不做电池监测标定与罗盘校准。
 
@@ -277,7 +283,8 @@ python scripts/upload-lua.py --port COMx --config tilttri
 4. **QSTABILIZE** 杆回中：倾转应接近 bicopter 的垂直 TRIM；三只电机混控。打俯仰应主要改变**尾 vs 前对**推力差。
 5. 固飞水平仍标 `BTILT_HORIZ_L/R`；Lua 不接管油门/尾电机。
 6. 切回垂起时 Lua 立即松手，由固件按 `Q_TILT_RATE_UP` 收到垂直。
-7. 标定导出：`export-aircraft-calib.py --config tilttri --aircraft NN`。
+7. **前后电机功率不同**（本机小有刷尾桨）：必须刷 `ArduPlane V4.6.3-thstfac`。拆桨后改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`（project 默认 1.0）。同一油门下前对 PWM 仍明显高于尾桨则降低 FRONT（可从 0.6 试）；打俯仰时前对 PWM 变化也应同比缩小。尾桨贴怠速但 S8 未到 MAX 可略升 REAR。写好后存 `aircraft/NN.param`，用 `upload-params.py --config tilttri --mode incremental --aircraft NN`。系数只改 PWM，补不出尾桨没有的牛顿。官方 4.6.3 无这两项参数。混控公式自检（不连飞控）：`python scripts/tri-thst-mix-check.py`。
+8. 标定导出：`export-aircraft-calib.py --config tilttri --aircraft NN`。
 
 ## 5. EdgeTX：形态 / 固飞模式 → CH8
 

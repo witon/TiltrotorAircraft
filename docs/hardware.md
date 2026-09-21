@@ -6,8 +6,8 @@
 
 | `--config` | 机架 | 尾电机 |
 |------------|------|--------|
-| `bicopter`（默认） | `Q_FRAME_CLASS=10` BiCopter | Lua 小桨（`FUNCTION=94`，双向电调） |
-| `tilttri` | `Q_FRAME_CLASS=7` Tilt-Tri + vectored yaw | 原生 Motor4（`FUNCTION=36`，单向电调） |
+| `bicopter`（默认） | `Q_FRAME_CLASS=10` BiCopter | Lua 小桨（`FUNCTION=94`，单向电调） |
+| `tilttri` | `Q_FRAME_CLASS=7` Tilt-Tri + vectored yaw | 原生 Motor4（`FUNCTION=36`）。等功率用官方 Plane；前大后小用自编译 `V4.6.3-thstfac` + `Q_M_THST_FRONT/REAR` |
 
 说明：ArduPlane 文档中 BiCopter 的 “Tailsitter” 为历史命名，**不是**机尾着地 tailsitter。
 
@@ -16,7 +16,7 @@
 | 项目 | 配置 |
 |------|------|
 | 结构 | 中段固定；左右**外段与电机一体**倾转（翼上舵机经推杆驱动外段）；倾转同时改变该段迎角与推力线 |
-| 旋翼 | 左右各 1，**对转**；机尾另有 1 只桨轴固定朝上的电机（`bicopter`：小桨辅助俯仰；`tilttri`：等功率升力电机） |
+| 旋翼 | 左右各 1，**对转**；机尾另有 1 只桨轴固定朝上的电机（`bicopter`：小桨辅助俯仰；`tilttri`：默认同功率升力电机，也可用 `Q_M_THST_FRONT/REAR` 适配更弱的尾电机） |
 | 尾翼 | 碳杆尾撑；平尾升降舵为唯一独立气动舵面；垂尾为固定安定面；尾撑上另装垂起尾电机 |
 | 独立气动舵面 | **仅平尾升降舵** |
 | 无独立舵面 | 无副翼、无襟翼、无方向舵 |
@@ -40,7 +40,7 @@
 | 轴 | 悬停（bicopter） | 悬停（tilttri） | 固飞（设计意图） |
 |----|------------------|-----------------|------------------|
 | 滚转 | 左右差动推力 | 左右差动推力 | 外段相对水平差动倾转（等效副翼） |
-| 俯仰 | 对称倾转矢量 + 尾桨正转半区推力 | 前对 vs 尾 Motor4 差推力 | 平尾升降舵 |
+| 俯仰 | 对称倾转矢量 + 尾桨推力 | 前对 vs 尾 Motor4 差推力 | 平尾升降舵 |
 | 偏航 | 左右翼差动倾转矢量 | 左右翼差动倾转矢量（vectored yaw） | 左右电机差动推力（等效方向舵） |
 
 固飞向左滚转时的外段差动（实机）：左外段相对水平**减小迎角**（降升力），右外段**增大迎角**（升升力）→ 滚转力矩。与「固飞中心 = 水平、小行程上下差动」一致。
@@ -55,7 +55,7 @@
 | 右倾转舵机 | 右外段整翼倾转 | 同上 |
 | 平尾升降舵 | 固飞俯仰 | 唯一独立气动舵面 |
 | 左 / 右电调 + 电机 | 推力 | 对转；固飞可差动偏航 |
-| 尾桨电机 + 电调 | 垂起俯仰 / 升力 | 桨轴固定朝上。`bicopter`：双向电调、Lua 正转半区。`tilttri`：单向电调、原生 Motor4 |
+| 尾桨电机 + 电调 | 垂起俯仰 / 升力 | 桨轴固定朝上。`bicopter`：单向电调、Lua 覆写。`tilttri`：同一只单向电调、原生 Motor4 |
 
 ### 倾转端点语义（BiCopter）
 
@@ -141,7 +141,7 @@ H743-MINI **V3** 侧面焊盘为 S1–S8、S11、S12（**无 S9/S10**）。本�
 
 **BiCopter：** 固飞推力由 [`bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 覆写 73/74（`BTILT_THR=1`）；`QSTABILIZE` 覆写 S8 尾桨。见 [ardupilot-setup.md](./ardupilot-setup.md) §3。
 
-**Tilt-Tri：** 三只电机由 QuadPlane 混控；Lua 只覆写固飞 S5/S6 差动。尾电调须改为**单向** PWM，`SERVO8_TRIM=1000`（停转在 MIN）。S8 仍与升降舵同组，约 50 Hz，勿开 DShot。
+**Tilt-Tri：** 三只电机由 QuadPlane 混控；Lua 只覆写固飞 S5/S6 差动。尾电调与 bicopter 同一只单向 PWM，`SERVO8_MIN`/`TRIM=1000`（停转）。S8 仍与升降舵同组，约 50 Hz，勿开 DShot。
 
 约束：
 
@@ -152,8 +152,8 @@ H743-MINI **V3** 侧面焊盘为 S1–S8、S11、S12（**无 S9/S10**）。本�
 - 机翼舵机只映射倾转功能，勿再映射 `Aileron=4`。
 - 悬停阶段 ESC 信号类型为普通 PWM（非 DShot）。
 - 电调：信号线接对应 `Sn`，动力线接主电池；信号地与飞控共地。
-- **BiCopter** 尾电调须设 3D/双向模式，中位约 1500 µs 停转；飞控脚本只用 ≥1500 的正转半区。
-- **Tilt-Tri** 尾电调改为与主机相同的**单向** PWM；停转在 `SERVO8_MIN`/`TRIM`≈1000。
+- **BiCopter** 尾电调为单向 PWM；停转在 `SERVO8_TRIM`（= MIN ≈ 1000 µs）；脚本下限钳在 TRIM。
+- **Tilt-Tri** 尾电调同一只单向 PWM；`SERVO8_MIN`/`TRIM=1000`。Motor4 走 `Q_M_PWM_MIN`–`MAX`（默认 1000–2000）。
 - 若该电调有 BEC，不要把 5V 并到现有舵机轨。
 
 ## 遥控链路
@@ -266,8 +266,8 @@ flowchart LR
 - [ ] 仅一路 BEC 5V；舵机轨与接收机、飞控信号地共地
 - [ ] S5 / S6 / S7 / S8 / S11 / S12 功能号与所选 `--config` 一致（见上表）
 - [ ] `SCR_ENABLE=1`；SD 上**只有**当前构型的 Lua（`upload-lua.py --config …` 会删掉另一份）
-- [ ] **bicopter：** GCS 见 `BTILT: fw tilt+throttle+vtol tail running`；固飞推油门 S11/S12 上升、S8≈1500；垂起解锁 S8 怠速正转
-- [ ] **tilttri：** GCS 见 `BTILT: tilttri fw differential tilt running`；固飞横滚差动倾转；垂起三电机混控；固飞尾电机停（MIN）
+- [ ] **bicopter：** GCS 见 `BTILT: fw tilt+throttle+vtol tail running`；固飞推油门 S11/S12 上升、S8≈1000；垂起解锁 S8 怠速正转
+- [ ] **tilttri：** GCS 见 `BTILT: tilttri fw differential tilt running`；固飞横滚差动倾转；垂起三电机混控；固飞尾电机停（MIN=1000）。不等功率尾桨：GCS 为 `V4.6.3-thstfac`，拆桨标定 `Q_M_THST_FRONT/REAR`
 
 ## 未记录规格
 

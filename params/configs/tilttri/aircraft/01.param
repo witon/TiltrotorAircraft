@@ -19,6 +19,11 @@ SERVO6_REVERSED,1
 
 Q_TILT_YAW_ANGLE,15
 
+# TRI front/rear mixer scale (needs ArduPlane V4.6.3-thstfac). Tune on the bench
+# with props off: drop FRONT if mains surge, raise REAR only while S8 has headroom.
+# Q_M_THST_FRONT,0.6
+# Q_M_THST_REAR,1.0
+
 # Lua FW level (same PWM as bicopter 01; tilttri Lua still uses these)
 BTILT_HORIZ_L,2000
 BTILT_HORIZ_R,1090

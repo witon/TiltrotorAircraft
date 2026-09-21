@@ -58,6 +58,8 @@ COMPARE_KEYS = (
     "Q_M_THST_EXPO",
     "Q_M_SLEW_UP_TIME",
     "Q_M_SPIN_MIN",
+    "Q_M_THST_FRONT",
+    "Q_M_THST_REAR",
     "Q_A_INPUT_TC",
     "Q_A_ANG_RLL_P",
     "Q_A_ANG_PIT_P",

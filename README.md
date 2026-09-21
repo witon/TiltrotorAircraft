@@ -7,7 +7,7 @@
 | `--config` | 说明 | 参数 | Lua |
 |------------|------|------|-----|
 | `bicopter`（默认） | BiCopter + Lua 尾桨俯仰 | [params/configs/bicopter/](params/configs/bicopter/) | [lua/bicopter_fw_tilt_aileron.lua](lua/bicopter_fw_tilt_aileron.lua) |
-| `tilttri` | Tilt-Tri vectored yaw；尾电机为 Motor4；Lua 只做固飞差动倾转 | [params/configs/tilttri/](params/configs/tilttri/) | [lua/tilttri_fw_tilt_aileron.lua](lua/tilttri_fw_tilt_aileron.lua) |
+| `tilttri` | Tilt-Tri vectored yaw；尾电机为 Motor4；Lua 只做固飞差动倾转。不等功率尾桨需自编译 `V4.6.3-thstfac` | [params/configs/tilttri/](params/configs/tilttri/) | [lua/tilttri_fw_tilt_aileron.lua](lua/tilttri_fw_tilt_aileron.lua) |
 
 - 硬件构型与接线：[docs/hardware.md](docs/hardware.md)
 - 飞行形态与模式：[docs/flight-modes.md](docs/flight-modes.md)
@@ -23,6 +23,12 @@
 ```powershell
 # 下载官方 Plane MatekH743 固件到 firmware/
 .\scripts\download-matekh743-plane.ps1
+
+# 不等功率 tilttri：从 GitHub Release 下载 V4.6.3-thstfac（无需本机编译）
+.\scripts\download-thstfac-plane.ps1
+
+# 混控前后比公式自检（不连飞控）
+python scripts/tri-thst-mix-check.py
 
 # 列出构型
 python scripts/upload-params.py --list-configs
