@@ -27,10 +27,10 @@ Q_M_THST_EXPO,0.80
 Q_M_SLEW_UP_TIME,0.8
 Q_M_SPIN_MIN,0.12
 # TRI mixer output scale (custom firmware ArduPlane V4.6.3-thstfac). 1.0 = stock.
-# Weak tail / strong fronts: lower FRONT (try 0.6 on the bench), raise REAR until S8
-# approaches MAX. Calibrated values go in aircraft/NN.param — do not rebuild firmware.
-Q_M_THST_FRONT,1.0
-Q_M_THST_REAR,1.0
+# Weak tail / strong fronts: lower FRONT, raise REAR until S8 approaches MAX.
+# 01 号机台架：FRONT=0.8 REAR=1.4。机号 overlay 可再覆盖。
+Q_M_THST_FRONT,0.8
+Q_M_THST_REAR,1.4
 Q_A_INPUT_TC,0.25
 Q_A_ANG_RLL_P,3.5
 Q_A_ANG_PIT_P,3.5
