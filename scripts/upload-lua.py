@@ -273,7 +273,7 @@ def main() -> int:
         reboot_board(master)
         print("Reboot commanded. Wait ~10s then reconnect in Mission Planner.")
         if cfg.config_id == "tilttri":
-            print("GCS 应出现类似: BTILT: tilttri fw differential tilt running")
+            print("GCS 应出现类似: BTILT: tilttri fw tilt+throttle running")
         else:
             print("GCS 应出现类似: BTILT: fw tilt+throttle+vtol tail running")
     else:

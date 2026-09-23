@@ -43,7 +43,7 @@ POSITION_MODES = {10, 11, 15, 19, 20, 21}
 
 EXPECTED_BTILT_MSG = {
     "bicopter": "BTILT: fw tilt+throttle+vtol tail running",
-    "tilttri": "BTILT: tilttri fw differential tilt running",
+    "tilttri": "BTILT: tilttri fw tilt+throttle running",
 }
 
 COMPARE_KEYS = (

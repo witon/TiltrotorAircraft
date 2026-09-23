@@ -141,7 +141,7 @@ H743-MINI **V3** 侧面焊盘为 S1–S8、S11、S12（**无 S9/S10**）。本�
 
 **BiCopter：** 固飞推力由 [`bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 覆写 73/74（`BTILT_THR=1`）；`QSTABILIZE` 覆写 S8 尾桨。见 [ardupilot-setup.md](./ardupilot-setup.md) §3。
 
-**Tilt-Tri：** 三只电机由 QuadPlane 混控；Lua 只覆写固飞 S5/S6 差动。尾电调与 bicopter 同一只单向 PWM，`SERVO8_MIN`/`TRIM=1000`（停转）。S8 仍与升降舵同组，约 50 Hz，勿开 DShot。
+**Tilt-Tri：** 垂起三电机由 QuadPlane 混控。固飞（`STABILIZE` / `MANUAL`）由 [`tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) 按油门杆覆写前电机 34/33（`BTILT_THR=1`，偏航差动 `BTILT_YAWDT`），并把 S8 写在 `SERVO8_MIN` 停转。本机无空速计、无高度计，固飞不走固件「等空速定高」。尾电调与 bicopter 同一只单向 PWM，`SERVO8_MIN`/`TRIM=1000`。S8 仍与升降舵同组，约 50 Hz，勿开 DShot。
 
 约束：
 
@@ -267,7 +267,7 @@ flowchart LR
 - [ ] S5 / S6 / S7 / S8 / S11 / S12 功能号与所选 `--config` 一致（见上表）
 - [ ] `SCR_ENABLE=1`；SD 上**只有**当前构型的 Lua（`upload-lua.py --config …` 会删掉另一份）
 - [ ] **bicopter：** GCS 见 `BTILT: fw tilt+throttle+vtol tail running`；固飞推油门 S11/S12 上升、S8≈1000；垂起解锁 S8 怠速正转
-- [ ] **tilttri：** GCS 见 `BTILT: tilttri fw differential tilt running`；固飞横滚差动倾转；垂起三电机混控；固飞尾电机停（MIN=1000）。不等功率尾桨：GCS 为 `V4.6.3-thstfac`，拆桨标定 `Q_M_THST_FRONT/REAR`
+- [ ] **tilttri：** GCS 见 `BTILT: tilttri fw tilt+throttle running`；固飞油门最低时 S11/S12 在 MIN 附近，推油门才升高；垂起三电机混控；固飞尾电机停（MIN=1000）。不等功率尾桨：GCS 为 `V4.6.3-thstfac`，拆桨标定 `Q_M_THST_FRONT/REAR`
 
 ## 未记录规格
 
