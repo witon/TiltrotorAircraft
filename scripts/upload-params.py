@@ -2,11 +2,12 @@
 """Upload Mission Planner-style .param files to a connected ArduPilot board.
 
 Modes:
-  incremental (default) — write project config only (--param-file).
+  incremental (default) — write project config only.
   full — write init.param, reboot and wait, then write project config.
 
-Optional --aircraft NN writes params/aircraft/NN.param after the project file
-(overlay for per-airframe tilt calib). Export with export-aircraft-calib.py.
+--config selects params/configs/<id>/ (default: bicopter). Optional --aircraft NN
+writes that config's aircraft/NN.param overlay. Switch configs with --mode full
+plus upload-lua.py --config <id>.
 
 Writes use batched PARAM_SET (default 16): send a batch, require PARAM_VALUE
 acks whose names and values match; any missing or mismatched ack fails the upload.
@@ -24,9 +25,14 @@ from pathlib import Path
 
 from pymavlink import mavutil
 
+from config_catalog import (
+    DEFAULT_CONFIG_ID,
+    PARAMS_DIR,
+    format_config_list,
+    load_config,
+)
+
 PARAM_LINE = re.compile(r"^([A-Za-z0-9_]+)\s*,\s*(-?[0-9.eE+-]+)\s*$")
-PARAMS_DIR = Path(__file__).resolve().parents[1] / "params"
-AIRCRAFT_DIR = PARAMS_DIR / "aircraft"
 REBOOT_WAIT_S = 14.0
 DEFAULT_BATCH_SIZE = 16
 
@@ -262,10 +268,20 @@ def main() -> int:
         help="full: init then project; incremental: project only (default)",
     )
     parser.add_argument(
+        "--config",
+        default=DEFAULT_CONFIG_ID,
+        help=f"Airframe config id under params/configs/ (default: {DEFAULT_CONFIG_ID})",
+    )
+    parser.add_argument(
+        "--list-configs",
+        action="store_true",
+        help="Print known configs and exit",
+    )
+    parser.add_argument(
         "--param-file",
         type=Path,
-        default=PARAMS_DIR / "matek-h743-mini-bicopter.param",
-        help="Project config .param (default: params/matek-h743-mini-bicopter.param)",
+        default=None,
+        help="Override project .param (default: params/configs/<id>/project.param)",
     )
     parser.add_argument(
         "--init-file",
@@ -287,15 +303,31 @@ def main() -> int:
     parser.add_argument(
         "--aircraft",
         default=None,
-        help="After project config, write params/aircraft/NN.param overlay (e.g. 01)",
+        help="After project config, write configs/<id>/aircraft/NN.param overlay",
     )
     args = parser.parse_args()
+
+    if args.list_configs:
+        print("Known configs:")
+        print(format_config_list())
+        return 0
 
     if args.batch_size < 1:
         print("--batch-size must be >= 1")
         return 1
-    if not args.param_file.is_file():
-        print(f"Param file not found: {args.param_file}")
+
+    try:
+        cfg = load_config(args.config)
+    except (FileNotFoundError, ValueError) as exc:
+        print(exc)
+        return 1
+
+    param_file = args.param_file if args.param_file is not None else cfg.project_param
+    print(f"Config: {cfg.config_id} ({cfg.title})")
+    print(f"Project: {param_file}")
+
+    if not param_file.is_file():
+        print(f"Param file not found: {param_file}")
         return 1
     if args.mode == "full" and not args.init_file.is_file():
         print(f"Init file not found: {args.init_file}")
@@ -309,11 +341,13 @@ def main() -> int:
         except ValueError as exc:
             print(exc)
             return 1
-        aircraft_file = AIRCRAFT_DIR / f"{aircraft_id}.param"
+        aircraft_file = cfg.aircraft_dir / f"{aircraft_id}.param"
         if not aircraft_file.is_file():
             print(f"Aircraft calib not found: {aircraft_file}")
-            print("Export first: python scripts/export-aircraft-calib.py --port COMx "
-                  f"--aircraft {aircraft_id}")
+            print(
+                "Export first: python scripts/export-aircraft-calib.py --port COMx "
+                f"--config {cfg.config_id} --aircraft {aircraft_id}"
+            )
             return 1
 
     master = connect(args.port, args.baud)
@@ -356,11 +390,11 @@ def main() -> int:
         if master is None:
             return 1
 
-    project_params = load_params(args.param_file)
+    project_params = load_params(param_file)
     stage_idx += 1
     stage = "project" if args.mode == "full" else "incr"
     print(
-        f"\n=== [{stage_idx}/{stages_total}] project: {args.param_file.name} "
+        f"\n=== [{stage_idx}/{stages_total}] project: {param_file.name} "
         f"({len(project_params)} params) ==="
     )
 

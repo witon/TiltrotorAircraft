@@ -1,0 +1,6 @@
+This is not a git-format-patch. Apply with:
+
+    python firmware/patches/plane-4.6.3/apply.py /path/to/ardupilot-Plane-4.6.3
+
+See README.md in this directory. The apply script matches unique snippets so clone
+line-ending differences do not break the edit.

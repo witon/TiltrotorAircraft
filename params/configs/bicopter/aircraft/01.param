@@ -1,5 +1,5 @@
-# Aircraft 01 — tilt servo + FW level calib
-# Exported from FC; upload via: upload-params.py --aircraft 01
+# Aircraft 01 — tilt servo + FW level calib (config: bicopter)
+# Exported from FC; upload via: upload-params.py --config bicopter --aircraft 01
 #
 # Bench check (QSTABILIZE pitch): TRIM must not sit against MIN/MAX.
 # Current left TRIM↔MIN ~200µs, right TRIM↔MAX ~250µs — if large pitch
@@ -28,4 +28,5 @@ BTILT_GAIN,0.12
 # Lua VTOL tail (requires bicopter_fw_tilt_aileron.lua)
 # Bench: rear motor was reversed at REV=1; GAIN 0.3 too weak (~120µs).
 BPIT_REV,-1
-BPIT_GAIN,0.7
+BPIT_GAIN,1
+BPIT_TRAVEL,500

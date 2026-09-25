@@ -1,20 +1,32 @@
-# ArduPilot 设置（BiCopter + Lua 固飞差动 / 油门 / 垂起尾桨）
+# ArduPilot 设置（多构型：BiCopter / Tilt-Tri）
 
-本机：Matek **H743-MINI V3** + 官方 **ArduPlane**（BiCopter）+ Lua 固飞等效副翼、固飞油门直通、垂起尾桨俯仰辅助。硬件与接线见 [hardware.md](./hardware.md)，模式见 [flight-modes.md](./flight-modes.md)。
+本机：Matek **H743-MINI V3** + 官方 **ArduPlane**。焊盘接线见 [hardware.md](./hardware.md)，模式见 [flight-modes.md](./flight-modes.md)。用 `--config` 选择机架（默认 `bicopter`）：
 
-**不需要**自编译固件。首次 DFU / 本地固件下载见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)。
+| `--config` | 机架 | Lua |
+|------------|------|-----|
+| `bicopter` | `Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`；Lua 固飞差动 + 油门直通 + 垂起尾桨 | [`bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) |
+| `tilttri` | `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`；尾电机 Motor4；Lua 固飞差动倾转 + 前电机油门直通（无空速/高度，不走等空速定高）。前后电机功率不同时用自编译 `V4.6.3-thstfac` 的 `Q_M_THST_FRONT` / `Q_M_THST_REAR` | [`tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) |
 
-## 1. 刷官方固件
+切换构型必须 **`--mode full`** 并 `upload-lua.py --config …`（会删除 SD 上另一构型的脚本）。机号 overlay 按构型隔离，不要把 bicopter 的 `aircraft/01.param` 套到 tilttri。
+
+等功率三旋翼仍可用官方 Plane。前对大电机 + 小尾桨的 tilttri 需要 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md) 里的 **V4.6.3-thstfac** 自定义固件（只编译一次；比例在地面站改参）。
+
+## 1. 刷固件
 
 推荐按 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md) 操作（本地下载 + 首次 DFU）。摘要：
 
-1. 下载固件：
+1. 下载官方固件（bicopter / 等功率 tilttri）：
    ```powershell
    .\scripts\download-matekh743-plane.ps1
    ```
-2. **首次**：按住 Boot，用 STM32CubeProgrammer（或 dfu-util）烧写 `firmware/Plane/stable/MatekH743/arduplane_with_bl.hex`。
-3. **已装 ArduPilot 后升级**：Mission Planner → **Install Firmware** → Load custom firmware → `arduplane.apj`；或在线选 **MatekH743** → **Plane**。
-4. 确认固件含 **Scripting**（近年官方 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
+   不等功率 tilttri：在 GitHub Actions 编译后下载（本机不必装 WSL）：
+   ```powershell
+   .\scripts\download-thstfac-plane.ps1
+   ```
+   工作流：仓库 **Actions** → **Build MatekH743 Plane** → **Run workflow**。说明见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)。
+2. **首次**：按住 Boot，用 STM32CubeProgrammer（或 dfu-util）烧写 `firmware/Plane/stable/MatekH743/arduplane_with_bl.hex`（官方）或 `firmware/Plane/custom/MatekH743/arduplane_with_bl.hex`（thstfac）。
+3. **已装 ArduPilot 后升级**：Mission Planner → **Install Firmware** → Load custom firmware → 对应目录的 `arduplane.apj`。**tilttri 不等功率不要从在线列表选 MatekH743 Plane**，会盖掉 `THST_FRONT/REAR` 混控。
+4. 自定义固件 GCS 应显示 **ArduPlane V4.6.3-thstfac**。官方固件含 **Scripting**（近年 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
 5. 刷写完成后连接飞控（115200），不要急着装桨。验证清单：[flash-verify-checklist.md](./flash-verify-checklist.md)。
 
 ## 2. 导入参数
@@ -23,19 +35,19 @@
 
 | 模式 | 用途 | 顺序 |
 |------|------|------|
-| **全量** | 新板 / 需可复现基线 | [`init.param`](../params/init.param)（默认快照且 `Q_ENABLE=1`）→ **重启**（`Q_*` 出现）→ [`matek-h743-mini-bicopter.param`](../params/matek-h743-mini-bicopter.param) →（可选）[`params/aircraft/NN.param`](../params/aircraft/) → 重启 |
-| **增量** | 已配置过、只改项目差异 | 仅写项目配置（飞控上须已有 `Q_*`）；可选再写机号 overlay |
+| **全量** | 新板 / 换构型 / 需可复现基线 | [`init.param`](../params/init.param)（默认快照且 `Q_ENABLE=1`）→ **重启**（`Q_*` 出现）→ [`params/configs/<id>/project.param`](../params/configs/) →（可选）[`params/configs/<id>/aircraft/NN.param`](../params/configs/) → 重启 |
+| **增量** | 已是同一构型、只改项目差异 | 仅写该构型 project（飞控上须已有 `Q_*`）；可选再写机号 overlay |
 
 `init.param` 来自恢复默认后的导出，并把 `Q_ENABLE` 置为 1，因此全量不再需要单独的 q-enable 文件。已用官方 Plane 参数元数据去掉 `Volatile` / `ReadOnly` / `Calibration` 项（见 [`init.param.removed.txt`](../params/init.param.removed.txt)；重跑：`python scripts/filter-init-params.py`）。未开 `Q_ENABLE` 时 `Q_TILT_*` 不在参数表中，故全量必须在 init 之后重启再写项目配置。
 
-项目 param 中的 `SERVO5/6_*` 端点与 `Q_TILT_YAW_ANGLE` 为占位。台架标定后按机号入库到 [`params/aircraft/NN.param`](../params/aircraft/)（含 `BTILT_HORIZ_L/R`），上传时用 `--aircraft NN` 在项目配置之后叠加写入。
+项目 param 中的 `SERVO5/6_*` 端点与 `Q_TILT_YAW_ANGLE` 为占位。台架标定后按构型+机号入库到 `params/configs/<id>/aircraft/NN.param`（含 `BTILT_HORIZ_L/R`），上传时用 `--config <id> --aircraft NN` 叠加写入。
 
 ### 2.1 Mission Planner（GUI）
 
 **全量：**
 
 1. Full Parameter List → **Load from file** → `init.param` → Write → **重启** → Refresh。
-2. 再 Load → `matek-h743-mini-bicopter.param` → Write → **重启**。
+2. 再 Load → `params/configs/bicopter/project.param` 或 `params/configs/tilttri/project.param` → Write → **重启**。
 3. 按 [hardware.md](./hardware.md) 完成 Accel **水平校准**（竖装 Roll90 后必做）。
 
 **增量：** 只做第 2 步（并确认 `Q_*` 已存在）。
@@ -46,20 +58,22 @@
 
 ```powershell
 pip install -r requirements.txt
+python scripts/upload-params.py --list-configs
 # 全量（脚本内会在 init 后自动重启并等待，再写项目配置）
 python scripts/upload-params.py --port COMx --mode full
+python scripts/upload-params.py --port COMx --config tilttri --mode full
 # 增量
 python scripts/upload-params.py --port COMx --mode incremental
-# 全量 / 增量 + 1 号机倾转标定 overlay
-python scripts/upload-params.py --port COMx --mode full --aircraft 01
-python scripts/upload-params.py --port COMx --mode incremental --aircraft 01
+# 全量 / 增量 + 1 号机倾转标定 overlay（路径随 --config）
+python scripts/upload-params.py --port COMx --config bicopter --mode full --aircraft 01
+python scripts/upload-params.py --port COMx --config bicopter --mode incremental --aircraft 01
 ```
 
 默认波特率 115200；`--no-reboot` 可跳过**最终**重启（全量中间的 init 后重启仍会执行）。
 
 ### 2.3 按机号导出标定（`export-aircraft-calib.py`）
 
-台架标定完成后，从飞控读出并写入 `params/aircraft/NN.param`（机号两位，如 `01`）：
+台架标定完成后，从飞控读出并写入 `params/configs/<id>/aircraft/NN.param`（机号两位，如 `01`）：
 
 | 参数 | 说明 |
 |------|------|
@@ -68,26 +82,43 @@ python scripts/upload-params.py --port COMx --mode incremental --aircraft 01
 | `BTILT_HORIZ_L` / `BTILT_HORIZ_R` | 固飞真水平（须已加载 Lua） |
 
 ```powershell
-# 须已部署 Lua 并重启，否则无 BTILT_*，脚本会中止且不写文件
-python scripts/export-aircraft-calib.py --port COMx --aircraft 01
+# 须已部署该构型 Lua 并重启，否则无 BTILT_*，脚本会中止且不写文件
+python scripts/export-aircraft-calib.py --port COMx --config bicopter --aircraft 01
+python scripts/export-aircraft-calib.py --port COMx --config tilttri --aircraft 01
 ```
 
-之后对该机上传参数时带 `--aircraft 01`。新机标定完同样 export 为 `02.param` 等。
+之后对该机上传参数时带 `--config <id> --aircraft 01`。新机标定完同样 export 为 `02.param` 等。
 
-### 参数摘要
+### 参数摘要（共用）
 
 | 类别 | 关键项 |
 |------|--------|
-| 机架 | `Q_ENABLE=1`，`Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`，`Q_TILT_MASK=3`，`Q_TILT_RATE_UP=90`，`Q_TILT_RATE_DN=90`（约 1 s 过渡），`Q_ASSIST_SPEED=-1`（关闭固飞空速辅助；有空速计且需要辅助时再改为略高于失速的正值），`SCHED_LOOP_RATE=300`（QuadPlane 要求 ≥100） |
-| 垂起姿态限幅 | `Q_OPTIONS=16384`（bit14：Q 模式忽略固飞 `PTCH_LIM_*` / `ROLL_LIMIT_DEG`），`Q_ANGLE_MAX=4500`（Plane 4.6：百分度，4500=45°；更新固件若只有 `Q_A_ANGLE_MAX` 则写度数值 45）。勿指望抬高 `PTCH_LIM_*` 来放大垂起杆量——固飞限幅应保持独立 |
+| 垂起姿态限幅 | `Q_OPTIONS=16384`（bit14：Q 模式忽略固飞 `PTCH_LIM_*` / `ROLL_LIMIT_DEG`），`Q_ANGLE_MAX=4500`（Plane 4.6：百分度，4500=45°） |
+| 垂起手感 | `Q_M_THST_EXPO=0.80`，`Q_M_SLEW_UP_TIME=0.8`，`Q_M_SPIN_MIN=0.12`，`Q_A_INPUT_TC=0.25`，`Q_A_ANG_RLL/PIT_P=3.5` |
 | 姿态 | `AHRS_ORIENTATION=16` |
 | CRSF | `BRD_ALT_CONFIG=1`，`SERIAL7_PROTOCOL=23` |
 | 脚本 | `SCR_ENABLE=1` |
-| 模式 | `FLTMODE_CH=8`；`FLTMODE1..6=17,17,2,2,0,0`（按低/中/高三段垫档，勿循环 `17/2/0`） |
-| 输出 | S5=75，S6=76，S7=19，S8=94，S11=73，S12=74 |
-| 无 GPS/罗盘 | `COMPASS_ENABLE=0`，`GPS1_TYPE=0`，`AHRS_GPS_USE=0`，`EK3_SRC1_POSXY/VELXY/VELZ/YAW=0`，`ARMING_CHECK=1048562`（Plane 4.6：启用除 Compass/GPS 外的解锁检查；4.7+ 可改为 `ARMING_SKIPCHK=12`），`ARMING_RUDDER=2`（油门最低时舵右解锁、舵左锁定） |
+| 模式 | `FLTMODE_CH=8`；`FLTMODE1..6=17,17,2,2,0,0` |
+| PWM | `Q_M_PWM_TYPE=0`（S8 与舵机同组，禁止 DShot） |
+| 无 GPS/罗盘 | `COMPASS_ENABLE=0`，`GPS1_TYPE=0`，`AHRS_GPS_USE=0`，`EK3_SRC1_POSXY/VELXY/VELZ/YAW=0`，`ARMING_CHECK=1048562`，`ARMING_RUDDER=2` |
 
-`Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写，并用 §2.3 导出到机号文件。本项目不做电池监测标定与罗盘校准。
+### 参数摘要（`bicopter`）
+
+| 类别 | 关键项 |
+|------|--------|
+| 机架 | `Q_FRAME_CLASS=10`，`Q_TILT_TYPE=3`，`Q_TILT_MASK=3`，`Q_TILT_RATE_UP/DN=90`，`Q_ASSIST_SPEED=-1`，`SCHED_LOOP_RATE=300` |
+| 输出 | S5=75，S6=76，S7=19，S8=94，S11=73，S12=74 |
+
+### 参数摘要（`tilttri`）
+
+| 类别 | 关键项 |
+|------|--------|
+| 机架 | `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`，`Q_TILT_MASK=3`，`Q_TILT_RATE_UP/DN=90`，`Q_ASSIST_SPEED=-1`，`SCHED_LOOP_RATE=300` |
+| 输出 | S5=75，S6=76，S7=19，S8=**36**（Motor4，`MIN`/`TRIM=1000`），S11=**34**，S12=**33** |
+| 尾电调 | 与 bicopter 同一只单向 PWM；停转在 MIN；约 50 Hz |
+| 前后推力比 | 需固件 `V4.6.3-thstfac`。`Q_M_THST_FRONT` / `Q_M_THST_REAR` 默认 1.0（等功率）。小尾桨先拆桨把 FRONT 降到约 0.6，尾桨若贴怠速且 S8 未到 MAX 再略升 REAR。标定写入 `aircraft/NN.param`，不必再编译。 |
+
+`Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写，并用 §2.3 导出到**该构型**机号文件。本项目不做电池监测标定与罗盘校准。
 
 H743-MINI 无内置罗盘；项目默认按**姿态模式**运行（无外置 GPS/罗盘），可解锁台架与 `QSTABILIZE` / `STABILIZE` / `MANUAL`。勿使用需定位的模式（`AUTO` / `RTL` / `QLOITER` / `QRTL` 等）；无罗盘时偏航会漂，垂起偏航保持较差。日后外接 GPS+罗盘时：恢复 `GPS1_TYPE`、打开罗盘、还原 `EK3_SRC1_*`（水平位置/速度用 GPS，航向用罗盘）、`ARMING_CHECK=1`（或 4.7+ 的 `ARMING_SKIPCHK=0`），并完成罗盘校准与 GPS 定位后再飞自主模式。
 
@@ -98,18 +129,19 @@ H743-MINI 无内置罗盘；项目默认按**姿态模式**运行（无外置 GP
 先 Disconnect Mission Planner，再：
 
 ```powershell
-python scripts/upload-lua.py --port COMx
+python scripts/upload-lua.py --port COMx --config bicopter
+python scripts/upload-lua.py --port COMx --config tilttri
 ```
 
-脚本经 MAVFTP 写入飞控 SD 的 `APM/scripts/`（目录不存在会创建），检查 `SCR_ENABLE`，默认重启以加载脚本。跳过重启：`--no-reboot`。其它文件：`--script path\to\file.lua`。
+脚本经 MAVFTP 写入飞控 SD 的 `APM/scripts/`（目录不存在会创建），**删除其它构型的 `.lua` 文件名**，检查 `SCR_ENABLE`，默认重启以加载脚本。跳过重启：`--no-reboot`。其它文件：`--script path\to\file.lua`。SD 上不可同时存在 bicopter 与 tilttri 两份脚本。
 
 ### 3.2 手动拷 SD（备选）
 
 1. 飞控插入 MicroSD，目录：`APM/scripts/`（若无则新建）。
-2. 复制 [`lua/bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 到该目录（覆盖旧版）。
+2. 复制该构型 Lua（[`bicopter_fw_tilt_aileron.lua`](../lua/bicopter_fw_tilt_aileron.lua) 或 [`tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua)）到该目录；**删掉另一构型的脚本**。
 3. 确认 `SCR_ENABLE=1`，重启飞控。
 
-### 3.3 验证
+### 3.3 验证（bicopter）
 
 1. GCS 消息应出现类似：`BTILT: fw tilt+throttle+vtol tail running`。
 2. Full Parameter List 中应出现脚本表参数：
@@ -124,17 +156,26 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_THR` | 1 | `1` 固飞油门直通 S11/S12；`0` 仅倾转 |
 | `BTILT_YAWDT` | 0.1 | 固飞偏航差动增益 -1..1（负号反转；约等于 `RUDD_DT_GAIN` 量级） |
 | `BPIT_ENABLE` | 1 | `1` 垂起尾桨俯仰辅助；`0` 关 |
-| `BPIT_GAIN` | 0.7 | 尾桨行程增益 0..1（由低到高试） |
+| `BPIT_GAIN` | 1 | 尾桨行程增益 0..1（由低到高试） |
 | `BPIT_REV` | -1 | 尾桨俯仰符号：`1` 或 `-1`，反了改符号 |
-| `BPIT_TRAVEL` | 400 | 满俯仰相对油门基线的最大偏置（µs） |
+| `BPIT_TRAVEL` | 500 | 满俯仰相对油门基线的最大偏置（µs） |
 | `BPIT_TFF` | 0.3 | 固飞→垂起扫角起点的低头前馈 0..1（`0` 关；与姿态环交叉淡入，起点忽略环路抬头） |
-| `BPIT_IDLE` | 0.1 | 垂起解锁怠速，占 `TRIM→MAX` 正转半区的比例（约等于主机 `Q_M_SPIN_ARM`） |
+| `BPIT_IDLE` | 0.1 | 垂起解锁怠速，占 `TRIM→MAX` 全行程的比例（约等于主机 `Q_M_SPIN_ARM`） |
 
-脚本在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门，并把 S8 钉在 `SERVO8_TRIM`（尾桨停转）。固飞 → **`QSTABILIZE`** 时短暂接管倾转移交；垂起稳态不覆写倾转/主机油门，但覆写 S8：解锁后在中位以上怠速正转，随油门增速，并叠加姿态环俯仰；PWM 不低于 `SERVO8_TRIM`。
+脚本在 **`STABILIZE`(2)** / **`MANUAL`(0)** 覆写倾转与（可选）油门，并把 S8 钉在 `SERVO8_TRIM`（尾桨停转）。固飞 → **`QSTABILIZE`** 时短暂接管倾转移交；垂起稳态不覆写倾转/主机油门，但覆写 S8：解锁后在 TRIM 以上怠速正转，随油门增速，并叠加姿态环俯仰；PWM 不低于 `SERVO8_TRIM`。
 
 `QSTABILIZE` → 固飞时，脚本按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）将倾转从当前角渐进扫到 `BTILT_HORIZ_*`，扫角期间即可差动，到位后中心钉在 `BTILT_HORIZ_*` 继续差动；不再瞬间跳到水平。固飞 → `QSTABILIZE` 时，脚本按 `Q_TILT_RATE_UP` 从上一帧固飞 PWM 渐进扫到 `SERVO*_TRIM`，并与固件约 90° 过渡等时后再松手，避免 stock 瞬时落到 **MIN**（水平以下）；油门覆写在离开固飞时立即停止；扫角期间尾桨为油门基线加 `loop×(1−remain) − TFF×remain`：刚切垂起时只出低头前馈（姿态环抬头压不过去），倾转到垂直后只跟环。进入固飞时尾桨立即写 `SERVO8_TRIM`（停转，无淡出）。
 
 `BTILT_THR` / `BTILT_YAWDT` 使用独立脚本表键 100；`BTILT_HORIZ_R` 使用表键 101；`BPIT_ENABLE` / `GAIN` / `REV` / `TRAVEL` 使用表键 102；`BPIT_TFF` 使用表键 103；`BPIT_IDLE` 使用表键 104（与倾转表键 89 分开；ArduPilot 不能扩大已有表的槽位数）。旧版 `BTILT_HORIZ` 升级后可忽略，台架时把原值抄到 L/R。
+
+### 3.4 验证（tilttri）
+
+1. GCS 消息应出现类似：`BTILT: tilttri fw tilt+throttle running`。
+2. 参数表有 `BTILT_HORIZ_L/R`、`TRAVEL`、`GAIN`、`REV`，以及 `BTILT_THR`、`BTILT_YAWDT`；**无** `BPIT_*`。
+3. `QSTABILIZE` 解锁：S8/S11/S12 由混控驱动（尾电机跟俯仰/油门；S8 在 1000 以上怠速）。脚本不覆写电机。
+4. `MANUAL` / `STABILIZE` Arm、油门最低：S11/S12 在各自 MIN 附近（电机基本停），S8 在 MIN（1000）附近停转。推油门后 S11/S12 一起升高；打偏航左右差动（`BTILT_YAWDT`，默认 0.1；反了改符号）。这是 Lua 按油门杆直通，不跟悬停油门。本机无空速计、无高度计；若交给固件，`STABILIZE` 会停在等空速的定高过渡里，主电机维持大约一半油门。
+5. 固飞打横滚 → S5/S6 差动；垂起 Lua 不覆写倾转。切回 `QSTABILIZE` 后三电机立即交回混控。
+6. 尾电调为单向 PWM（非 3D）；`SERVO8_MIN`/`TRIM=1000`。若电调仍是双向且 MIN=1000，油门最低会进反转区乱转。
 
 ### 固飞油门不转（已知 BiCopter 路径）
 
@@ -149,7 +190,7 @@ python scripts/upload-lua.py --port COMx
 3. `MANUAL` Arm：推油门 → S11/S12 PWM 上升且电机转；回中停转。
 4. 固飞打偏航 → 左右油门差动；方向反了把 `BTILT_YAWDT` 设为负值。
 5. `QSTABILIZE` → 固飞扫角未结束时打横滚 → S5/S6 在扫角轨迹上应已见同号差动偏移。
-6. 固飞打俯仰 / 推油门 → S8 保持约 1500，尾电机不转。
+6. 固飞打俯仰 / 推油门 → S8 保持约 1000，尾电机不转。
 
 ## 4. 台架标定（拆桨）
 
@@ -179,17 +220,17 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_GAIN` | 0.12 | 差动增益 0..1；由低到高试 |
 | `SERVO7_MIN` / `TRIM` / `MAX` | 1000 / 1500 / 2000 | 平尾行程端点与中立 |
 | `SERVO7_REVERSED` | 0 | 固飞俯仰方向正确 |
-| `SERVO8_MIN` / `TRIM` / `MAX` | 1000 / 1500 / 2000 | 尾桨双向电调；TRIM=停转；脚本下限钳在 TRIM |
+| `SERVO8_MIN` / `TRIM` / `MAX` | 1000 / 1000 / 2000 | 尾桨单向电调；TRIM=停转；脚本下限钳在 TRIM |
 | `BPIT_ENABLE` | 1 | 垂起尾桨；台架可先关再开 |
 | `BPIT_REV` | -1 | 抬头 → 减小正转（压向 TRIM）；反了改为 `1` |
-| `BPIT_TRAVEL` | 400 | 满俯仰相对油门基线的最大偏置（µs） |
-| `BPIT_GAIN` | 0.7 | 尾桨增益 0..1；由低到高试 |
+| `BPIT_TRAVEL` | 500 | 满俯仰相对油门基线的最大偏置（µs） |
+| `BPIT_GAIN` | 1 | 尾桨增益 0..1；由低到高试 |
 | `BPIT_IDLE` | 0.1 | 垂起解锁怠速（`TRIM→MAX` 比例）；怠速过快则降 |
 | `BPIT_TFF` | 0.3 | 固飞→垂起扫角起点低头前馈（交叉淡入）；过猛低头则降，仍抬头则升；`0` 关 |
 | `SERVO11_REVERSED` / `SERVO12_REVERSED` | 0 | 对转方向按机身要求 |
 | `SERVO11/12_MIN` / `TRIM` / `MAX` | 1000 / 1000 / 2000 | 一般可沿用；电调校准区不同再微调 |
 
-操作步骤见下文 4.1–4.4。端点语义见 [hardware.md](./hardware.md)。
+操作步骤见下文 4.1–4.5。端点语义见 [hardware.md](./hardware.md)。
 
 ### 4.1 倾转方向与 VTOL 端点
 
@@ -200,13 +241,13 @@ python scripts/upload-lua.py --port COMx
 
 ### 4.1.1 垂起俯仰权威与大倾角排查（拆桨）
 
-垂起俯仰靠**左右倾转对称矢量**加 **S8 尾桨正转半区推力**（不是平尾主控）；稳态 `QSTABILIZE` 下 Lua 不覆写倾转，但覆写尾桨。默认若不设 `Q_OPTIONS` bit14，Q 模式俯仰目标会被固飞 `PTCH_LIM_MAX_DEG` / `PTCH_LIM_MIN_DEG` 卡住（本仓库 init 约为 +20° / −25°），满杆 DesPitch 上不去，大倾角后易饱和发散。
+垂起俯仰靠**左右倾转对称矢量**加 **S8 尾桨推力**（不是平尾主控）；稳态 `QSTABILIZE` 下 Lua 不覆写倾转，但覆写尾桨。默认若不设 `Q_OPTIONS` bit14，Q 模式俯仰目标会被固飞 `PTCH_LIM_MAX_DEG` / `PTCH_LIM_MIN_DEG` 卡住（本仓库 init 约为 +20° / −25°），满杆 DesPitch 上不去，大倾角后易饱和发散。
 
 上传项目 param 后确认飞控上有 `Q_OPTIONS=16384`、`Q_ANGLE_MAX=4500`（Plane 4.6；若参数表为 `Q_A_ANGLE_MAX` 则应为 45），然后：
 
 1. **QSTABILIZE**、杆回中：S5/S6 在 TRIM（垂直）。
 2. 慢打俯仰满杆（左右应**同向**偏转）：Mission Planner **DesPitch** 应能到约 **±45°**（仍卡在 ~20° 说明 bit14 / `Q_ANGLE_MAX` 未生效，重新写参并重启）。
-3. 看 S5/S6 PWM：双向都有足够、大致对称的行程；一侧几乎不动或很快顶死 → 按 §4.1 重标 `SERVO5/6_*`，并令 `Q_TILT_YAW_ANGLE` 与 MAX 侧后仰角一致。机号 overlay（如 [`params/aircraft/01.param`](../params/aircraft/01.param)）若 TRIM 贴边，优先重标后再 `export-aircraft-calib.py`。
+3. 看 S5/S6 PWM：双向都有足够、大致对称的行程；一侧几乎不动或很快顶死 → 按 §4.1 重标 `SERVO5/6_*`，并令 `Q_TILT_YAW_ANGLE` 与 MAX 侧后仰角一致。机号 overlay（如 [`params/configs/bicopter/aircraft/01.param`](../params/configs/bicopter/aircraft/01.param)）若 TRIM 贴边，优先重标后再 `export-aircraft-calib.py`。
 4. 仍发散时再调倾转主导轴：`Q_A_RAT_PIT_FF`（及必要时 P）；勿先靠加大升降舵混控救垂起俯仰。尾桨增益见 §4.4；加大 `BPIT_GAIN` 后若振荡，略降 `Q_A_RAT_PIT_*` 或尾桨增益。
 
 ### 4.2 固飞水平与差动（Lua）
@@ -223,14 +264,27 @@ python scripts/upload-lua.py --port COMx
 
 ### 4.4 垂起尾桨（S8，拆桨）
 
-尾桨桨轴固定朝上，双向电调中位停转；脚本只用正转半区（PWM ≥ `SERVO8_TRIM`）。垂起解锁后怠速正转，随油门增速，并叠加姿态环俯仰（不是只跟遥控杆），与倾转矢量并联。电调须为 3D/双向；S8 与升降舵同组，约 50 Hz PWM，勿开 DShot。
+尾桨桨轴固定朝上，单向 PWM 电调；停转在 `SERVO8_TRIM`（= MIN ≈ 1000 µs），脚本下限钳在 TRIM。垂起解锁后怠速正转，随油门增速，并叠加姿态环俯仰（不是只跟遥控杆），与倾转矢量并联。S8 与升降舵同组，约 50 Hz PWM，勿开 DShot。
 
-1. 锁定：S8 ≈ `SERVO8_TRIM`（1500），尾电机不转。
-2. **QSTABILIZE** 解锁、油门最低、机身水平：S8 ≈ 1550（`BPIT_IDLE=0.1`），尾电机慢转；怠速过快/不转则调 `BPIT_IDLE`。
-3. 推油门：S8 向 `SERVO8_MAX`（2000）上升，转速跟着升。慢打俯仰：S8 只在 1500–2000 内动，不出现低于中位。抬头应对应减小正转（压向 TRIM）；反了把 `BPIT_REV` 改号（本机默认 `-1`）。
-4. **STABILIZE** / **MANUAL**：打俯仰、推油门，S8 保持约 1500，尾电机不转。
-5. **STABILIZE** → **QSTABILIZE**、油门最低：切档后 S8 应在怠速之上再叠加低头前馈（本机向下吹，默认 `TFF=0.3` 约 +84 µs），随后随扫角回到怠速附近。`BPIT_TFF=0` 则无此偏置。打一点抬头杆再切档，起点仍应向下吹（环路抬头被淡出），且 PWM 仍 ≥ 1500。
+1. 锁定：S8 ≈ `SERVO8_TRIM`（1000），尾电机不转。
+2. **QSTABILIZE** 解锁、油门最低、机身水平：S8 ≈ 1100（`BPIT_IDLE=0.1`），尾电机慢转；怠速过快/不转则调 `BPIT_IDLE`。
+3. 推油门：S8 向 `SERVO8_MAX`（2000）上升，转速跟着升。慢打俯仰：S8 只在 1000–2000 内动，不低于 TRIM。抬头应对应减小正转（压向 TRIM）；反了把 `BPIT_REV` 改号（本机默认 `-1`）。
+4. **STABILIZE** / **MANUAL**：打俯仰、推油门，S8 保持约 1000，尾电机不转。
+5. **STABILIZE** → **QSTABILIZE**、油门最低：切档后 S8 应在怠速之上再叠加低头前馈（本机向下吹，默认 `TFF=0.3` 约 +84 µs），随后随扫角回到怠速附近。`BPIT_TFF=0` 则无此偏置。打一点抬头杆再切档，起点仍应向下吹（环路抬头被淡出），且 PWM 仍 ≥ TRIM（1000）。
 6. `BPIT_GAIN` 从 0.7 左右往上试；过猛再降。`BPIT_ENABLE=0` 可临时关掉尾桨。试飞固飞→垂起若仍抬头则加大 `BPIT_TFF`，过猛低头则减小。
+
+### 4.5 Tilt-Tri 台架差异（`--config tilttri`）
+
+接线不变。与 bicopter 的差别：
+
+1. 尾电调为单向 PWM（非 3D）；停转在 MIN ≈ 1000 µs。勿再用双向电调。
+2. `SERVO8_FUNCTION=36`，`SERVO8_MIN`/`TRIM=1000`。勿再找 `BPIT_*`。
+3. **垂起倾转不看 `SERVO*_TRIM`。** BiCopter（`Q_TILT_TYPE=3`）垂起中心是 TRIM（01 号机左 1150 / 右 1950）。Tilt-Tri vectored yaw（`TYPE=2`）把 MIN↔MAX 当成「后仰极限 ↔ 水平以下」，垂直点在 `Q_TILT_YAW_ANGLE/(90+YAW_ANGLE)`。全量 tilttri 占位 1100/1500/2000 会让 QSTABILIZE 远离已标定垂直。01 号机 overlay 拷了 bicopter 的 MIN/MAX/TRIM，并把 **`SERVO5/6_REVERSED` 相对 bicopter 取反**，使 QSTABILIZE 落在 TRIM 附近。固飞仍由 Lua `BTILT_HORIZ_*`（01：左 2000 / 右 1090）覆写，所以换构型后固飞看起来仍对。
+4. **QSTABILIZE** 杆回中：倾转应接近 bicopter 的垂直 TRIM；三只电机混控。打俯仰应主要改变**尾 vs 前对**推力差。
+5. 固飞水平仍标 `BTILT_HORIZ_L/R`。固飞前电机由 Lua 按油门杆直通（`BTILT_THR=1`），尾电机写 MIN；离开固飞后三电机交回混控。
+6. 切回垂起时 Lua 立即松手，由固件按 `Q_TILT_RATE_UP` 收到垂直。
+7. **前后电机功率不同**（本机小有刷尾桨）：必须刷 `ArduPlane V4.6.3-thstfac`。拆桨后改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`（project 默认 1.0）。同一油门下前对 PWM 仍明显高于尾桨则降低 FRONT（可从 0.6 试）；打俯仰时前对 PWM 变化也应同比缩小。尾桨贴怠速但 S8 未到 MAX 可略升 REAR。写好后存 `aircraft/NN.param`，用 `upload-params.py --config tilttri --mode incremental --aircraft NN`。系数只改 PWM，补不出尾桨没有的牛顿。官方 4.6.3 无这两项参数。混控公式自检（不连飞控）：`python scripts/tri-thst-mix-check.py`。
+8. 标定导出：`export-aircraft-calib.py --config tilttri --aircraft NN`。
 
 ## 5. EdgeTX：形态 / 固飞模式 → CH8
 
@@ -264,12 +318,29 @@ ArduPilot 将 `FLTMODE_CH` PWM 划成六段；本机按低/中/高三段垫档�
 ## 6. 性能与安全
 
 - Lua 固飞滚转带宽低于源码补丁；增益宁低勿高。
-- 脚本未加载、报错或覆写超时 → 倾转回到固件锁定位（**MIN**，双侧略低于水平）；固飞油门也会失去直通；尾桨回到 `SERVO8_TRIM`（停转）。起飞前确认 GCS 有 BTILT 运行消息。
+- 脚本未加载、报错或覆写超时 → **bicopter** 倾转回到固件锁定位（**MIN**）；固飞油门也会失去直通；尾桨回到 `SERVO8_TRIM`（停转）。**tilttri** 失去固飞差动，且固飞自稳油门回到固件等空速定高（主电机可能维持悬停油门）；垂起混控仍在。起飞前确认 GCS 有对应 BTILT 运行消息。
 - 低速 / 应急：用**形态开关**切回垂起（`QSTABILIZE`）。勿在低速切固飞并停在 `MANUAL` 当应急。
-- 悬停 PID 保持默认，试飞后再调。过渡速率项目 param 已设 `Q_TILT_RATE_UP=90`、`Q_TILT_RATE_DN=90`（°/s），使 TRIM↔HORIZ 约 90° 行程约 **1 s**；若实机角行程偏差可再微调。去固飞用 `Q_TILT_RATE_DN`（回退 UP）；回垂起移交用 `Q_TILT_RATE_UP`。
+- 悬停 PID 保持默认角度/速率环结构，试飞后再微调 D/FF。项目 param 已把**手感**放软：`Q_M_THST_EXPO=0.80`、`Q_M_SLEW_UP_TIME=0.8`、`Q_M_SPIN_MIN=0.12`（离地不那么窜），`Q_A_INPUT_TC=0.25`、`Q_A_ANG_RLL/PIT_P=3.5`（打舵不那么贼）。`Q_ANGLE_MAX` 仍为 45°，满杆改出能力保留。若怠速不跟转，把 `Q_M_SPIN_MIN` 改回 0.15。
+- 过渡速率项目 param 已设 `Q_TILT_RATE_UP=90`、`Q_TILT_RATE_DN=90`（°/s），使 TRIM↔HORIZ 约 90° 行程约 **1 s**；若实机角行程偏差可再微调。去固飞用 `Q_TILT_RATE_DN`（回退 UP）；回垂起移交用 `Q_TILT_RATE_UP`。
 - 垂起大俯仰后杆量纠正不回：先查 DesPitch 是否被 `PTCH_LIM_*` 卡住（应用 `Q_OPTIONS` bit14 + `Q_ANGLE_MAX=4500`），再查倾转 PWM 是否饱和 / TRIM 是否贴边（见 §4.1.1），并确认尾桨方向与 `BPIT_GAIN`（见 §4.4）。
 
-## 7. 推荐顺序小结
+## 7. 日志诊断（`analyze-log.py`）
+
+USB 连上飞控后，可把机上 `APM/LOGS/*.BIN` 拉下来，对照当前 `--config`（及可选机号 overlay）给出改参建议：解锁失败、Lua 是否加载、构型参数漂移、倾转占位、振动、姿态跟踪、S5/S6/S8/S11/S12 饱和等。
+
+```powershell
+# 列出机上日志
+python scripts/analyze-log.py --port COMx --list-logs
+# 下最新 1 条并分析（tilttri 1 号机）
+python scripts/analyze-log.py --port COMx --latest 1 --config tilttri --aircraft 01
+# 指定编号，或只分析已下载文件
+python scripts/analyze-log.py --port COMx --log-id 91 --config tilttri
+python scripts/analyze-log.py logs_download\00000091.BIN --config tilttri --aircraft 01
+```
+
+下载目录默认 `logs_download/`（不入库）。脚本只给建议，不会改飞控参数。无 GPS 时间戳的台架日志仍可分析 MSG/PARM/PWM。油门离地猛、打舵贼，会分别提示 `Q_M_SLEW_UP_TIME` / `Q_M_THST_EXPO` 与 `Q_A_INPUT_TC` / `Q_A_ANG_*_P`。
+
+## 8. 推荐顺序小结
 
 ```mermaid
 flowchart LR
@@ -277,9 +348,9 @@ flowchart LR
   flash[DFU或MP刷写]
   init[全量init含Q_ENABLE]
   reboot1[重启]
-  param[导入项目param]
+  param["导入configs/id/project.param"]
   ac[可选机号overlay]
-  lua[复制脚本到SD]
+  lua["upload-lua --config"]
   calib[台架标定]
   export[export机号param]
   stick[固飞横滚差动确认]

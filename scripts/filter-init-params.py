@@ -98,7 +98,7 @@ def main() -> int:
         "# Factory-default snapshot (reset FC export) with Q_ENABLE=1 for full upload.\n"
         "# Filtered via ArduPlane apm.pdef.json: dropped Volatile / ReadOnly / Calibration.\n"
         "# Regenerate filter: python scripts/filter-init-params.py\n"
-        "# Full: upload this, reboot (Q_* appear), then matek-h743-mini-bicopter.param.\n"
+        "# Full: upload this, reboot (Q_* appear), then params/configs/<id>/project.param.\n"
         "# See docs/ardupilot-setup.md\n"
     )
     INIT_PATH.write_text(header + "".join(body), encoding="utf-8")

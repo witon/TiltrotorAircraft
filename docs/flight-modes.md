@@ -50,12 +50,17 @@ flowchart TB
 
 | 形态 | 飞控模式 | 含义 |
 |------|----------|------|
-| 垂起 | **仅** `QSTABILIZE` | 悬停姿态自稳；**不用** `QHOVER`；尾桨仅在此模式、解锁后正转 |
+| 垂起 | **仅** `QSTABILIZE` | 悬停姿态自稳；**不用** `QHOVER`。尾电机见下 |
 | 固飞 | `STABILIZE` | 飞控自稳（杆回中回平） |
 | 固飞 | `MANUAL` | 纯手动直通 |
 | 过渡 | 无独立开关档 | 由**形态开关**切换触发 |
 
-本机正式档位不含 `QHOVER`、`FBWA`。机尾俯仰小电机**仅**在 `QSTABILIZE` 解锁后正转（PWM ≥ 中位，随油门增速）；进入固飞立即停转。
+本机正式档位不含 `QHOVER`、`FBWA`。尾电机随构型：
+
+| `--config` | 垂起（`QSTABILIZE` 解锁） | 固飞 |
+|------------|--------------------------|------|
+| `bicopter` | Lua 尾桨全行程（PWM ≥ TRIM=MIN，随油门增速） | 立即写 TRIM 停转 |
+| `tilttri` | 原生 Motor4 参与三旋翼混控 | Lua 前电机跟油门杆（含偏航差动）；尾电机写 MIN 停转 |
 
 ## 遥控器混控 → `FLTMODE_CH`
 
@@ -100,7 +105,7 @@ flowchart LR
 | 固飞模式开关：自稳 ↔ 纯手动 | **否**（仅固飞内换控制方式） |
 
 - **垂起 → 固飞**：形态开关切固飞 → 进入 `STABILIZE` 或 `MANUAL` → 前飞过渡；倾转由垂直工作区大行程扫向水平工作区（见 [hardware.md](./hardware.md) 倾转端点语义）。
-- **固飞 → 垂起**：形态开关切垂起 → 进入 `QSTABILIZE` → 后飞/悬停过渡。扫角起点尾桨只出低头前馈（`BPIT_TFF`），不跟姿态环抬头；倾转到垂直后交叉淡入环路。见 [ardupilot-setup.md](./ardupilot-setup.md) §3 / §4.4。
+- **固飞 → 垂起**：形态开关切垂起 → 进入 `QSTABILIZE` → 后飞/悬停过渡。`bicopter` 扫角起点尾桨只出低头前馈（`BPIT_TFF`），不跟姿态环抬头；倾转到垂直后交叉淡入环路。`tilttri` 尾电机由混控接管，固飞油门覆写同时停止，Lua 不覆写 recover。见 [ardupilot-setup.md](./ardupilot-setup.md) §3 / §4。
 
 倾转与各轴控制的设计意图、实机形态 / 差动滚转图示、以及固飞 Lua 差动倾转约定，见 [hardware.md](./hardware.md)；刷参与脚本部署见 [ardupilot-setup.md](./ardupilot-setup.md)。本文只定模式与开关体系。
 

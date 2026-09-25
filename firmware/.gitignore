@@ -1,3 +1,10 @@
-# Downloaded binaries; re-fetch with scripts/download-matekh743-plane.ps1
-*
-!.gitignore
+# Downloaded official binaries; re-fetch with scripts/download-matekh743-plane.ps1
+Plane/stable/
+Plane/latest/
+
+# Custom build outputs (GitHub Actions / local waf). Keep README and patches.
+Plane/custom/**/*.apj
+Plane/custom/**/*.hex
+Plane/custom/**/*.bin
+Plane/custom/**/firmware-version.txt
+*.zip

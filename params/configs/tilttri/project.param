@@ -1,0 +1,117 @@
+# Matek H743-MINI V3 — TiltrotorAircraft Tilt-Tri vectored yaw (ArduPlane)
+# Config id: tilttri
+# Wiring unchanged from bicopter (S5–S8 / S11–S12). Tail ESC is
+# unidirectional PWM (not 3D/bidirectional). S8 stays ~50 Hz; no DShot.
+# Full: upload-params.py --config tilttri --mode full
+# Then: upload-lua.py --config tilttri  (removes other config scripts)
+# SERVO5/6 endpoints and BTILT_HORIZ_* below are placeholders; calib in
+# params/configs/tilttri/aircraft/NN.param (--aircraft NN).
+# See docs/ardupilot-setup.md
+
+# --- QuadPlane / Tilt-Tri ---
+Q_ENABLE,1
+Q_TILT_ENABLE,1
+Q_FRAME_CLASS,7
+Q_TILT_TYPE,2
+Q_TILT_MASK,3
+Q_TILT_YAW_ANGLE,15
+Q_TILT_RATE_UP,90
+Q_TILT_RATE_DN,90
+Q_ASSIST_SPEED,-1
+Q_OPTIONS,16384
+Q_ANGLE_MAX,4500
+Q_M_PWM_TYPE,0
+# First-hover feel: more low-throttle resolution, slew up, less snappy stick.
+# Keep Q_ANGLE_MAX=45° for full-stick recover; do not drop it to "soften" the stick.
+Q_M_THST_EXPO,0.80
+Q_M_SLEW_UP_TIME,0.8
+Q_M_SPIN_MIN,0.12
+# TRI mixer output scale (custom firmware ArduPlane V4.6.3-thstfac). 1.0 = stock.
+# Weak tail / strong fronts: lower FRONT, raise REAR until S8 approaches MAX.
+# 01 号机台架：FRONT=0.8 REAR=1.2。机号 overlay 可再覆盖。
+Q_M_THST_FRONT,0.8
+Q_M_THST_REAR,1.2
+Q_A_INPUT_TC,0.25
+Q_A_ANG_RLL_P,3.5
+Q_A_ANG_PIT_P,3.5
+SCHED_LOOP_RATE,300
+
+# --- AHRS mount (cabin vertical, USB up, arrow forward = Roll90) ---
+AHRS_ORIENTATION,16
+
+# --- CRSF on SERIAL7 (RX6/TX6), MatekH743 ---
+BRD_ALT_CONFIG,1
+SERIAL7_PROTOCOL,23
+SERIAL7_OPTIONS,0
+
+# --- Scripting (FW differential tilt Lua only; VTOL mixer owns motors) ---
+SCR_ENABLE,1
+
+# --- Flight modes on CH8 (EdgeTX mix: morph + FW mode switches) ---
+# Pad by low/mid/high bands (not 17/2/0 twice): mid ~1425/~1500 -> FLTMODE3/4.
+FLTMODE_CH,8
+FLTMODE1,17
+FLTMODE2,17
+FLTMODE3,2
+FLTMODE4,2
+FLTMODE5,0
+FLTMODE6,0
+
+# --- Servo outputs (same pads as bicopter; FUNCTION ids differ) ---
+# Vectored yaw: MANUAL = forward, QSTABILIZE = up; YAW_ANGLE = past-vertical.
+# S5 tilt left
+SERVO5_FUNCTION,75
+SERVO5_MIN,1100
+SERVO5_TRIM,1500
+SERVO5_MAX,2000
+SERVO5_REVERSED,1
+
+# S6 tilt right
+SERVO6_FUNCTION,76
+SERVO6_MIN,1100
+SERVO6_TRIM,1500
+SERVO6_MAX,2000
+SERVO6_REVERSED,0
+
+# S7 elevator
+SERVO7_FUNCTION,19
+SERVO7_MIN,1000
+SERVO7_TRIM,1500
+SERVO7_MAX,2000
+SERVO7_REVERSED,0
+
+# S8 Motor4 rear (unidirectional PWM ESC; MIN/TRIM=1000 stop;
+# same timer group as S7 ~50 Hz; no DShot)
+SERVO8_FUNCTION,36
+SERVO8_MIN,1000
+SERVO8_TRIM,1000
+SERVO8_MAX,2000
+SERVO8_REVERSED,0
+
+# S11 Motor2 front left / S12 Motor1 front right (PWM ESC)
+SERVO11_FUNCTION,34
+SERVO11_MIN,1000
+SERVO11_TRIM,1000
+SERVO11_MAX,2000
+SERVO11_REVERSED,0
+
+SERVO12_FUNCTION,33
+SERVO12_MIN,1000
+SERVO12_TRIM,1000
+SERVO12_MAX,2000
+SERVO12_REVERSED,0
+
+# --- Attitude-only: no external GPS/compass (H743-MINI has none onboard) ---
+# Allows arming QSTABILIZE / STABILIZE / MANUAL without home/GPS/compass.
+# Do not use position modes (AUTO/RTL/QLOITER/QRTL). Restore GPS+compass later if needed.
+# Plane 4.6: ARMING_CHECK bitmask (all checks except Compass+GPS). Plane 4.7+: use ARMING_SKIPCHK=12 instead.
+COMPASS_ENABLE,0
+GPS1_TYPE,0
+AHRS_GPS_USE,0
+EK3_SRC1_POSXY,0
+EK3_SRC1_VELXY,0
+EK3_SRC1_VELZ,0
+EK3_SRC1_YAW,0
+ARMING_CHECK,1048562
+# ArmOrDisarm: throttle low + rudder right to arm, left to disarm
+ARMING_RUDDER,2

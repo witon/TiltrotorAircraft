@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Export per-aircraft tilt calibration params from a connected ArduPilot board.
 
-Reads SERVO5/6 endpoints, Q_TILT_YAW_ANGLE, and BTILT_HORIZ_L/R, then writes
-params/aircraft/NN.param for use with: upload-params.py --aircraft NN
+Reads the calib list from params/configs/<id>/config.json, then writes
+params/configs/<id>/aircraft/NN.param for: upload-params.py --config ID --aircraft NN
 
-BTILT_* require the Lua script loaded; missing names abort without writing.
+Required names abort without writing if missing. Optional names are skipped.
+BTILT_* require the Lua script for that config loaded.
 """
 
 from __future__ import annotations
@@ -16,25 +17,11 @@ from pathlib import Path
 
 from pymavlink import mavutil
 
-PARAMS_DIR = Path(__file__).resolve().parents[1] / "params"
-AIRCRAFT_DIR = PARAMS_DIR / "aircraft"
-
-# Order matches Mission Planner-style readability in the exported file.
-CALIB_PARAMS = (
-    "SERVO5_MIN",
-    "SERVO5_TRIM",
-    "SERVO5_MAX",
-    "SERVO5_REVERSED",
-    "SERVO6_MIN",
-    "SERVO6_TRIM",
-    "SERVO6_MAX",
-    "SERVO6_REVERSED",
-    "Q_TILT_YAW_ANGLE",
-    "BTILT_HORIZ_L",
-    "BTILT_HORIZ_R",
+from config_catalog import (
+    DEFAULT_CONFIG_ID,
+    format_config_list,
+    load_config,
 )
-
-BTILT_REQUIRED = ("BTILT_HORIZ_L", "BTILT_HORIZ_R")
 
 
 def normalize_aircraft_id(raw: str) -> str:
@@ -104,30 +91,44 @@ def format_value(value: float) -> str:
     return repr(value)
 
 
-def write_param_file(path: Path, aircraft_id: str, values: dict[str, float]) -> None:
+def _section_comment(name: str) -> str | None:
+    if name.startswith("SERVO5_"):
+        return "# S5 TiltMotorLeft (FUNCTION 75)"
+    if name.startswith("SERVO6_"):
+        return "# S6 TiltMotorRight (FUNCTION 76)"
+    if name.startswith("BTILT_"):
+        return "# Lua FW level"
+    if name.startswith("BPIT_"):
+        return "# Lua VTOL tail"
+    return None
+
+
+def write_param_file(
+    path: Path,
+    config_id: str,
+    aircraft_id: str,
+    values: dict[str, float],
+    order: list[str],
+) -> None:
     lines = [
-        f"# Aircraft {aircraft_id} — tilt servo + FW level calib",
-        f"# Exported from FC; upload via: upload-params.py --aircraft {aircraft_id}",
-        "",
-        "# S5 TiltMotorLeft (FUNCTION 75)",
-        f"SERVO5_MIN,{format_value(values['SERVO5_MIN'])}",
-        f"SERVO5_TRIM,{format_value(values['SERVO5_TRIM'])}",
-        f"SERVO5_MAX,{format_value(values['SERVO5_MAX'])}",
-        f"SERVO5_REVERSED,{format_value(values['SERVO5_REVERSED'])}",
-        "",
-        "# S6 TiltMotorRight (FUNCTION 76)",
-        f"SERVO6_MIN,{format_value(values['SERVO6_MIN'])}",
-        f"SERVO6_TRIM,{format_value(values['SERVO6_TRIM'])}",
-        f"SERVO6_MAX,{format_value(values['SERVO6_MAX'])}",
-        f"SERVO6_REVERSED,{format_value(values['SERVO6_REVERSED'])}",
-        "",
-        f"Q_TILT_YAW_ANGLE,{format_value(values['Q_TILT_YAW_ANGLE'])}",
-        "",
-        "# Lua FW level (requires bicopter_fw_tilt_aileron.lua)",
-        f"BTILT_HORIZ_L,{format_value(values['BTILT_HORIZ_L'])}",
-        f"BTILT_HORIZ_R,{format_value(values['BTILT_HORIZ_R'])}",
+        f"# Aircraft {aircraft_id} — tilt servo + FW level calib (config: {config_id})",
+        f"# Exported from FC; upload via: upload-params.py --config {config_id} "
+        f"--aircraft {aircraft_id}",
         "",
     ]
+    last_section: str | None = None
+    for name in order:
+        section = _section_comment(name)
+        if section and section != last_section:
+            if last_section is not None:
+                lines.append("")
+            lines.append(section)
+            last_section = section
+        elif section is None and last_section is not None:
+            lines.append("")
+            last_section = None
+        lines.append(f"{name},{format_value(values[name])}")
+    lines.append("")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -141,42 +142,77 @@ def main() -> int:
     )
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument(
+        "--config",
+        default=DEFAULT_CONFIG_ID,
+        help=f"Airframe config id under params/configs/ (default: {DEFAULT_CONFIG_ID})",
+    )
+    parser.add_argument(
+        "--list-configs",
+        action="store_true",
+        help="Print known configs and exit",
+    )
+    parser.add_argument(
         "--aircraft",
-        required=True,
+        required=False,
         help="Aircraft id 01..99 (also accepts 1)",
     )
     parser.add_argument(
         "--output",
         type=Path,
         default=None,
-        help="Output .param path (default: params/aircraft/NN.param)",
+        help="Output .param path (default: params/configs/<id>/aircraft/NN.param)",
     )
     args = parser.parse_args()
 
+    if args.list_configs:
+        print("Known configs:")
+        print(format_config_list())
+        return 0
+
+    if args.aircraft is None:
+        print("--aircraft is required unless --list-configs")
+        return 1
+
     try:
+        cfg = load_config(args.config)
         aircraft_id = normalize_aircraft_id(args.aircraft)
-    except ValueError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(exc)
         return 1
 
     out = args.output
     if out is None:
-        out = AIRCRAFT_DIR / f"{aircraft_id}.param"
+        out = cfg.aircraft_dir / f"{aircraft_id}.param"
+
+    print(f"Config: {cfg.config_id} ({cfg.title})")
 
     master = connect(args.port, args.baud)
     if master is None:
         return 1
 
     values: dict[str, float] = {}
-    missing: list[str] = []
-    for name in CALIB_PARAMS:
+    missing_required: list[str] = []
+    order: list[str] = []
+
+    for name in cfg.calib_required:
         print(f"Reading {name} ...")
         val = read_param(master, name)
         if val is None:
-            missing.append(name)
+            missing_required.append(name)
             print(f"  MISSING: {name}")
         else:
             values[name] = val
+            order.append(name)
+            print(f"  {name}={format_value(val)}")
+
+    for name in cfg.calib_optional:
+        print(f"Reading {name} (optional) ...")
+        val = read_param(master, name)
+        if val is None:
+            print(f"  skip missing optional: {name}")
+        else:
+            values[name] = val
+            order.append(name)
             print(f"  {name}={format_value(val)}")
 
     try:
@@ -184,20 +220,20 @@ def main() -> int:
     except Exception:  # noqa: BLE001
         pass
 
-    if missing:
-        btilt_miss = [n for n in missing if n in BTILT_REQUIRED]
+    if missing_required:
+        btilt_miss = [n for n in missing_required if n.startswith("BTILT_")]
         if btilt_miss:
             print(
-                "ERROR: BTILT_* not on FC. Deploy Lua (upload-lua.py) and reboot, "
-                "then export again."
+                "ERROR: BTILT_* not on FC. Deploy Lua "
+                f"(upload-lua.py --config {cfg.config_id}) and reboot, then export again."
             )
-        other = [n for n in missing if n not in BTILT_REQUIRED]
+        other = [n for n in missing_required if not n.startswith("BTILT_")]
         if other:
             print("ERROR: missing params:", ", ".join(other))
         print("Abort: not writing incomplete file.")
         return 2
 
-    write_param_file(out, aircraft_id, values)
+    write_param_file(out, cfg.config_id, aircraft_id, values, order)
     print(f"Wrote {out} ({len(values)} params)")
     return 0
 

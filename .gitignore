@@ -1,2 +1,14 @@
 # Downloaded ArduPilot parameter metadata (filter-init-params.py)
 params/apm.pdef.json
+
+# Onboard .BIN pulled for analyze-log.py
+logs_download/
+
+# Local ArduPilot clone + waf objects (build-matekh743-plane.sh cache)
+.cache-ardupilot/
+
+# Patched Plane binaries (rebuild with scripts/build-matekh743-plane.sh)
+firmware/Plane/custom/**/*.apj
+firmware/Plane/custom/**/*.hex
+firmware/Plane/custom/**/*.bin
+firmware/Plane/custom/**/firmware-version.txt
