@@ -23,6 +23,11 @@ Q_TILT_YAW_ANGLE,15
 Q_M_THST_FRONT,0.8
 Q_M_THST_REAR,1.2
 
+# Pitch rate damping after log 111: stick-centered nose-down at ThO~0.33.
+# Leave Q_A_ANG_PIT_P and Q_A_RAT_PIT_P at project values (3.5 / 0.25).
+Q_A_RAT_PIT_D,0.008
+Q_A_RAT_PIT_I,0.18
+
 # Lua FW level (same PWM as bicopter 01; tilttri Lua still uses these)
 BTILT_HORIZ_L,2000
 BTILT_HORIZ_R,1090
