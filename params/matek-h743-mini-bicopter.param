@@ -1,3 +1,0 @@
-# Moved to params/configs/bicopter/project.param
-# Use: python scripts/upload-params.py --config bicopter
-# Mission Planner: Load params/configs/bicopter/project.param
