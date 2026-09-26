@@ -13,9 +13,9 @@
 | 首次 DFU 刷写（含 bootloader） | `arduplane_with_bl.hex` | [Plane/stable/MatekH743](https://firmware.ardupilot.org/Plane/stable/MatekH743/) |
 | 已装 ArduPilot 后的升级 | `arduplane.apj` | 同上 |
 | 双向 DShot（可选） | `MatekH743-bdshot` 目录下对应文件 | [Plane/stable/MatekH743-bdshot](https://firmware.ardupilot.org/Plane/stable/MatekH743-bdshot/) |
-| tilttri 前后推力比（自定义） | `firmware/Plane/custom/MatekH743/arduplane.apj` | GitHub Actions 编译；`.\scripts\download-thstfac-plane.ps1` 下载 `V4.6.3-thstfac` |
+| 前后推力比（自定义） | `firmware/Plane/custom/MatekH743/arduplane.apj` | GitHub Actions 编译；`.\scripts\download-thstfac-plane.ps1` 下载 `V4.6.3-thstfac` |
 
-**bicopter** 与等功率 tilttri 用 **stable** 官方包即可。前对大电机 + 小尾桨的 tilttri 刷 **thstfac** 自定义包；GCS 版本须为 `ArduPlane V4.6.3-thstfac`。之后只改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`，不必再编译。不要用 Mission Planner 在线 MatekH743 Plane 覆盖这套固件。
+等功率用 **stable** 官方包。前对大电机 + 小尾桨刷 **thstfac** 自定义包；GCS 版本须为 `ArduPlane V4.6.3-thstfac`。之后只改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`，不必再编译。不要用 Mission Planner 在线 MatekH743 Plane 覆盖这套固件。
 
 本地下载官方包：
 

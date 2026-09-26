@@ -2,7 +2,7 @@
 """Analyze ArduPilot .BIN logs and print param / setup suggestions.
 
 Works on a local file, or downloads from the flight controller over USB/MAVFTP
-then analyzes. Findings are mapped to this repo's --config (bicopter / tilttri).
+then analyzes. Findings are mapped to this repo's --config (tilttri).
 """
 
 from __future__ import annotations
@@ -42,7 +42,6 @@ MODE_NAMES = {
 POSITION_MODES = {10, 11, 15, 19, 20, 21}
 
 EXPECTED_BTILT_MSG = {
-    "bicopter": "BTILT: fw tilt+throttle+vtol tail running",
     "tilttri": "BTILT: tilttri fw tilt+throttle running",
 }
 
@@ -353,7 +352,7 @@ def findings_from_stats(
                 "机上 Lua 与 --config 不一致",
                 " / ".join(btilt_msgs[:6]),
                 f"当前分析按 {config_id}（期望 `{expected_msg}`）。"
-                f"切换构型须 full 参数 + `upload-lua.py --config {config_id}`（会删掉另一构型脚本）。",
+                f"重新 `upload-lua.py --config {config_id}`（会删掉 SD 上的旧 bicopter 脚本）并重启。",
             )
         )
     else:
@@ -382,7 +381,7 @@ def findings_from_stats(
                 "error",
                 "脚本运行报错",
                 " | ".join(lua_fail[:8]),
-                "按报错修 SD 上的 lua 或参数表；bicopter 与 tilttri 脚本不能同时存在。",
+                "按报错修 SD 上的 lua 或参数表。若仍有 bicopter_fw_tilt_aileron.lua，删掉后再传 tilttri 脚本。",
             )
         )
 
@@ -489,7 +488,7 @@ def findings_from_stats(
                 f"`python scripts/upload-params.py --port COMx --config {config_id} "
                 f"--mode incremental"
                 + (f" --aircraft {aircraft}" if aircraft else "")
-                + "`。换构型必须 --mode full。",
+                + "`。全量基线用 --mode full。",
             )
         )
     if missing and stats.parms:
@@ -524,7 +523,7 @@ def findings_from_stats(
                 "倾转端点仍是 project 占位",
                 "SERVO5_MIN/MAX=1100/2000",
                 "按 docs/ardupilot-setup.md §4 标定 MIN/TRIM/MAX 与 REVERSED，"
-                "不要直接套另一构型的 aircraft overlay。",
+                "再用 export-aircraft-calib.py 写入 aircraft overlay。",
             )
         )
 
@@ -581,8 +580,8 @@ def findings_from_stats(
         if er >= ATT_ERR_MEAN_DEG or ep >= ATT_ERR_MEAN_DEG:
             q_mode = 17 in stats.mode_counts
             sug = (
-                "垂起：先确认倾转 TRIM 在垂直、Q_OPTIONS bit14 与 Q_ANGLE_MAX=4500；"
-                "默认 PID 先别猛加。tilttri 查 Motor4 是否在动；bicopter 查 BPIT_REV/GAIN。"
+                "垂起：先确认倾转垂直点、Q_OPTIONS bit14 与 Q_ANGLE_MAX=4500；"
+                "默认 PID 先别猛加。查 Motor4 是否在动。"
                 if q_mode
                 else "固飞：先确认差动方向 BTILT_REV，增益从 0.12 小步加 BTILT_GAIN；"
                 "满杆饱和则加大 BTILT_TRAVEL，但先排除机械卡死。"
@@ -689,7 +688,6 @@ def _handling_findings(findings: list[Finding], stats: LogStats) -> None:
 def _servo_findings(findings: list[Finding], stats: LogStats, config_id: str) -> None:
     labels = {5: "倾转左 S5", 6: "倾转右 S6", 8: "尾/S8", 11: "S11", 12: "S12"}
     fw = any(n in (0, 2) for n in stats.mode_counts)
-    qstab = 17 in stats.mode_counts
     for ch, st in sorted(stats.rcou.items()):
         if st.n < 10:
             continue
@@ -710,24 +708,6 @@ def _servo_findings(findings: list[Finding], stats: LogStats, config_id: str) ->
                     "tilttri 固飞时 S8 不像停转",
                     f"S8 PWM {st.lo:.0f}..{st.hi:.0f}（固飞应靠近 MIN=1000）",
                     "核对 SERVO8_FUNCTION=36 且 MIN/TRIM=1000；固件应在固飞关尾电机。",
-                )
-            )
-        if ch == 8 and config_id == "bicopter" and qstab and stats.arm_events and st.hi <= 1050:
-            findings.append(
-                Finding(
-                    "warn",
-                    "bicopter 垂起解锁后尾桨几乎不动",
-                    f"S8 PWM {st.lo:.0f}..{st.hi:.0f}",
-                    "查 BPIT_ENABLE=1、BPIT_IDLE，以及 Lua 是否加载；电调须单向、TRIM=停转。",
-                )
-            )
-        if ch in (11, 12) and fw and config_id == "bicopter" and st.hi <= 1050 and stats.arm_events:
-            findings.append(
-                Finding(
-                    "warn",
-                    "bicopter 固飞油门直通可能没生效",
-                    f"{name} 最大 {st.hi:.0f} µs",
-                    "见 docs 固飞油门不转：要 BTILT_THR=1 且脚本在跑，否则 stock 会把 73/74 关断。",
                 )
             )
 

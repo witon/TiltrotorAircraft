@@ -10,7 +10,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PARAMS_DIR = REPO_ROOT / "params"
 CONFIGS_DIR = PARAMS_DIR / "configs"
-DEFAULT_CONFIG_ID = "bicopter"
+DEFAULT_CONFIG_ID = "tilttri"
 
 
 @dataclass(frozen=True)

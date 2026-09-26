@@ -98,8 +98,6 @@ def _section_comment(name: str) -> str | None:
         return "# S6 TiltMotorRight (FUNCTION 76)"
     if name.startswith("BTILT_"):
         return "# Lua FW level"
-    if name.startswith("BPIT_"):
-        return "# Lua VTOL tail"
     return None
 
 

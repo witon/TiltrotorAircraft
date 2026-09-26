@@ -2,8 +2,8 @@
 """Upload a Lua script to an ArduPilot board via MAVFTP.
 
 Puts the file under APM/scripts/ (created if missing), removes Lua files that
-belong to other --config ids, warns if SCR_ENABLE is not 1, then reboots so
-scripting reloads (use --no-reboot to skip).
+belong to other --config ids and the retired bicopter script, warns if
+SCR_ENABLE is not 1, then reboots so scripting reloads (use --no-reboot to skip).
 """
 
 from __future__ import annotations
@@ -25,6 +25,8 @@ from config_catalog import (
 
 DEFAULT_REMOTE_DIR = "APM/scripts"
 PUT_TIMEOUT_S = 60.0
+# Retired airframe script. Still deleted from the FC SD so it cannot fight tilttri.
+STALE_LUA_NAMES = ("bicopter_fw_tilt_aileron.lua",)
 
 
 def connect(port: str, baud: int):
@@ -235,11 +237,11 @@ def main() -> int:
 
     remote_dir = args.remote_dir.replace("\\", "/").rstrip("/")
     remote_path = f"{remote_dir}/{script.name}"
-    stale = [
-        f"{remote_dir}/{name}"
-        for name in other_lua_remote_names(cfg)
-        if name != script.name
-    ]
+    stale_names: list[str] = []
+    for name in (*other_lua_remote_names(cfg), *STALE_LUA_NAMES):
+        if name != script.name and name not in stale_names:
+            stale_names.append(name)
+    stale = [f"{remote_dir}/{name}" for name in stale_names]
 
     master = connect(args.port, args.baud)
     if master is None:
@@ -272,10 +274,7 @@ def main() -> int:
     if not args.no_reboot:
         reboot_board(master)
         print("Reboot commanded. Wait ~10s then reconnect in Mission Planner.")
-        if cfg.config_id == "tilttri":
-            print("GCS 应出现类似: BTILT: tilttri fw tilt+throttle running")
-        else:
-            print("GCS 应出现类似: BTILT: fw tilt+throttle+vtol tail running")
+        print("GCS 应出现类似: BTILT: tilttri fw tilt+throttle running")
     else:
         print("Skipped reboot. Reboot the flight controller to load the script.")
 

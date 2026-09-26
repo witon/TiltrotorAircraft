@@ -5,9 +5,9 @@ Modes:
   incremental (default) — write project config only.
   full — write init.param, reboot and wait, then write project config.
 
---config selects params/configs/<id>/ (default: bicopter). Optional --aircraft NN
-writes that config's aircraft/NN.param overlay. Switch configs with --mode full
-plus upload-lua.py --config <id>.
+--config selects params/configs/<id>/ (default: tilttri). Optional --aircraft NN
+writes that config's aircraft/NN.param overlay. After a param change, upload
+the matching Lua with upload-lua.py --config <id>.
 
 Writes use batched PARAM_SET (default 16): send a batch, require PARAM_VALUE
 acks whose names and values match; any missing or mismatched ack fails the upload.

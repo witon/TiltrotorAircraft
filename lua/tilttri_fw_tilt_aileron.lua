@@ -16,7 +16,6 @@
 -- Deploy with: python scripts/upload-lua.py --config tilttri
 -- Requires SCR_ENABLE=1. Servo functions: 75/76 tilt (S5/S6),
 --   34/33 front motors (S11/S12), 36 tail (S8).
--- Do not also load bicopter_fw_tilt_aileron.lua (it would fight this script).
 --
 -- Script params (GCS):
 --   BTILT_HORIZ_L = left tilt PWM at true wing-level (FW center)
@@ -49,9 +48,9 @@ local K_MOTOR1 = 33
 local K_MOTOR2 = 34
 local K_MOTOR4 = 36
 
--- Same table keys as bicopter tilt params so HORIZ overlays stay BTILT_*.
--- Key 100 (size 2): FW throttle, same names as bicopter. Do not assert:
--- a conflicting table must not kill tilt. Do not register tail tables (102-104).
+-- Tilt params use table key 89 (HORIZ_L, TRAVEL, GAIN, REV). Key 101: HORIZ_R.
+-- Key 100 (size 2): FW throttle THR / YAWDT. Do not assert: a conflicting
+-- table must not kill tilt. Do not register tail tables (102-104).
 local PARAM_TABLE_KEY = 89
 local PARAM_TABLE_KEY_HR = 101
 local PARAM_TABLE_KEY_THR = 100

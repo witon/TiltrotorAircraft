@@ -1,9 +1,9 @@
 # Matek H743-MINI V3 — TiltrotorAircraft Tilt-Tri vectored yaw (ArduPlane)
 # Config id: tilttri
-# Wiring unchanged from bicopter (S5–S8 / S11–S12). Tail ESC is
+# Wiring: S5–S8 / S11–S12. Tail ESC is
 # unidirectional PWM (not 3D/bidirectional). S8 stays ~50 Hz; no DShot.
 # Full: upload-params.py --config tilttri --mode full
-# Then: upload-lua.py --config tilttri  (removes other config scripts)
+# Then: upload-lua.py  (also removes the retired bicopter script)
 # SERVO5/6 endpoints and BTILT_HORIZ_* below are placeholders; calib in
 # params/configs/tilttri/aircraft/NN.param (--aircraft NN).
 # See docs/ardupilot-setup.md
@@ -57,7 +57,7 @@ FLTMODE4,2
 FLTMODE5,0
 FLTMODE6,0
 
-# --- Servo outputs (same pads as bicopter; FUNCTION ids differ) ---
+# --- Servo outputs ---
 # Vectored yaw: MANUAL = forward, QSTABILIZE = up; YAW_ANGLE = past-vertical.
 # S5 tilt left
 SERVO5_FUNCTION,75
