@@ -64,7 +64,7 @@
 
 #### Tilt-Tri / vectored yaw（`Q_TILT_TYPE=2`）
 
-官方 scaled 0 = 越过垂直后仰，scaled 1000 = 朝前（水平以下）。**不用 `SERVO*_TRIM` 当垂起中心**。垂直约在 `Q_TILT_YAW_ANGLE/(90+YAW_ANGLE)`。固飞横滚由 [`lua/tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) 绕 `BTILT_HORIZ_*` 差动；垂起倾转和三电机由固件混控，Lua **不**做 FW→VTOL recover。固件刷写见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)；参数与标定见 [ardupilot-setup.md](./ardupilot-setup.md)。
+官方 scaled 0 = 越过垂直后仰，scaled 1000 = 朝前（水平以下）。**不用 `SERVO*_TRIM` 当垂起中心**。垂直约在 `Q_TILT_YAW_ANGLE/(90+YAW_ANGLE)`。固飞横滚由 [`lua/tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) 绕 `BTILT_HORIZ_*` 差动。切回垂起时 Lua 把倾转从当前角扫回垂起，避免松手后落到 scaled 1000（比真水平更朝下）；扫完后垂起倾转和三电机仍由固件混控。固件刷写见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)；参数与标定见 [ardupilot-setup.md](./ardupilot-setup.md)。
 
 | 项目 | 本机约定 |
 |------|----------|
@@ -132,9 +132,9 @@ H743-MINI **V3** 侧面焊盘为 S1–S8、S11、S12（**无 S9/S10**）。本�
 | 接收机 | RadioMaster ER6GV（V = Vario 气压计，非陀螺） |
 | 接收机 → 飞控 | CRSF（`RX6` / `TX6`） |
 | 通道顺序 | 建议 AETR |
-| 飞行模式通道 | 默认 RC CH8（`FLTMODE_CH=8`）；为遥控器混控后的合成通道 |
+| 飞行模式通道 | RC CH8 为遥控器混控后的合成通道。`FLTMODE_CH=0`，由 Lua 按原六档选模 |
 
-遥控器用**形态开关**与**固飞模式开关**两路，经混控合成到 CH8；垂起仅 `QSTABILIZE`，固飞为 `STABILIZE` / `MANUAL`。开关语义与真值表见 [flight-modes.md](./flight-modes.md)。
+遥控器用**形态开关**与**固飞模式开关**两路，经混控合成到 CH8；垂起仅 `QSTABILIZE`，固飞为 `STABILIZE` / `MANUAL`。拨向固飞后，倾转前半段模式仍是 `QSTABILIZE`，过 `BTILT_QFRAC` 才进入所选固飞模式。开关语义与真值表见 [flight-modes.md](./flight-modes.md)。
 
 ELRS 要求遥控器 **CH5 为 Arm**（射频侧）；与飞控 `ARMING` 通道可分开理解。
 

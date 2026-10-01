@@ -15,8 +15,9 @@ Q_FRAME_CLASS,7
 Q_TILT_TYPE,2
 Q_TILT_MASK,3
 Q_TILT_YAW_ANGLE,15
-Q_TILT_RATE_UP,90
-Q_TILT_RATE_DN,90
+# Bench check of qhold: 9 is 10x slower than the 90 deg/s flight rate (~10 s for 90 deg).
+Q_TILT_RATE_UP,9
+Q_TILT_RATE_DN,9
 Q_ASSIST_SPEED,-1
 Q_OPTIONS,16384
 Q_ANGLE_MAX,4500
@@ -48,8 +49,14 @@ SERIAL7_OPTIONS,0
 SCR_ENABLE,1
 
 # --- Flight modes on CH8 (EdgeTX mix: morph + FW mode switches) ---
+# FLTMODE_CH=0: firmware does not read the switch. tilttri Lua reads CH8
+# and applies the same six slots as FLTMODE1..6 below (keep those values;
+# they are also the fallback if FLTMODE_CH is set back to 8).
+# VTOL->FW stays in QSTABILIZE until tilt passes BTILT_QFRAC, then enters
+# the selected FW mode. BTILT_QFRAC=0 skips that hold only; it does not
+# restore RC mode select. Do not set FLTMODE_CH=8 while the script runs.
 # Pad by low/mid/high bands (not 17/2/0 twice): mid ~1425/~1500 -> FLTMODE3/4.
-FLTMODE_CH,8
+FLTMODE_CH,0
 FLTMODE1,17
 FLTMODE2,17
 FLTMODE3,2
@@ -115,3 +122,5 @@ EK3_SRC1_YAW,0
 ARMING_CHECK,1048562
 # ArmOrDisarm: throttle low + rudder right to arm, left to disarm
 ARMING_RUDDER,2
+# Log only while armed.
+LOG_DISARMED,0
