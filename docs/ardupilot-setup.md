@@ -140,7 +140,7 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_HORIZ_L` | 1200 | 左倾转真水平 PWM（固飞中心） |
 | `BTILT_HORIZ_R` | 1200 | 右倾转真水平 PWM（固飞中心） |
 | `BTILT_TRAVEL` | 100 | 满杆时相对 HORIZ 的单侧最大偏置（µs） |
-| `BTILT_GAIN` | 0.12 | 倾转差动增益 0..1（由低到高试） |
+| `BTILT_GAIN` | 0.24 | 倾转差动增益 0..1（由低到高试） |
 | `BTILT_REV` | 1 | 倾转横滚符号：`1` 或 `-1`，反了改符号 |
 | `BTILT_THR` | 1 | `1` 固飞前电机按油门杆直通；`0` 仅倾转 |
 | `BTILT_YAWDT` | 0.1 | 固飞偏航差动增益 -1..1（负号反转） |
@@ -178,7 +178,7 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_HORIZ_L` / `BTILT_HORIZ_R` | 1200 | 固飞杆回中：左右外段各自与中段齐平（01：左 2000 / 右 1090） |
 | `BTILT_REV` | 1 | 左滚 → 左减迎角、右增迎角；反了改为 `-1` |
 | `BTILT_TRAVEL` | 100 | 满杆相对 HORIZ 的单侧最大偏置（µs） |
-| `BTILT_GAIN` | 0.12 | 差动增益 0..1；由低到高试 |
+| `BTILT_GAIN` | 0.24 | 差动增益 0..1；由低到高试 |
 | `SERVO7_MIN` / `TRIM` / `MAX` | 1000 / 1500 / 2000 | 平尾行程端点与中立 |
 | `SERVO7_REVERSED` | 0 | 固飞俯仰方向正确 |
 | `SERVO8_MIN` / `TRIM` / `MAX` | 1000 / 1000 / 2000 | Motor4 单向电调；MIN/TRIM=停转 |
