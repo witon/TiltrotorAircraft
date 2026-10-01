@@ -52,9 +52,11 @@ SCR_ENABLE,1
 # FLTMODE_CH=0: firmware does not read the switch. tilttri Lua reads CH8
 # and applies the same six slots as FLTMODE1..6 below (keep those values;
 # they are also the fallback if FLTMODE_CH is set back to 8).
-# VTOL->FW stays in QSTABILIZE until tilt passes BTILT_QFRAC, then enters
-# the selected FW mode. BTILT_QFRAC=0 skips that hold only; it does not
-# restore RC mode select. Do not set FLTMODE_CH=8 while the script runs.
+# VTOL->FW stays in QSTABILIZE until tilt enters the near-horizontal band
+# (last 1-BTILT_QFRAC of the travel). FW->VTOL keeps FW throttle and
+# differential until tilt leaves that same band. BTILT_QFRAC=0 skips both
+# holds; it does not restore RC mode select. Do not set FLTMODE_CH=8
+# while the script runs.
 # Pad by low/mid/high bands (not 17/2/0 twice): mid ~1425/~1500 -> FLTMODE3/4.
 FLTMODE_CH,0
 FLTMODE1,17

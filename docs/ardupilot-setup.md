@@ -144,13 +144,13 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_REV` | 1 | 倾转横滚符号：`1` 或 `-1`，反了改符号 |
 | `BTILT_THR` | 1 | `1` 固飞前电机按油门杆直通；`0` 仅倾转 |
 | `BTILT_YAWDT` | 0.1 | 固飞偏航差动增益 -1..1（负号反转） |
-| `BTILT_QFRAC` | 0.7 | `FLTMODE_CH=0` 时，垂起→固飞先保持 `QSTABILIZE` 的行程比例（0 = 不保持）。不写入 project param，等 Lua 注册后再在 GCS 改 |
+| `BTILT_QFRAC` | 0.7 | `FLTMODE_CH=0` 时，离水平最后 `(1-QFRAC)` 行程（默认约 27°）用固飞律，更立的一段用垂起律。0 = 两边都立刻换控制律。不写入 project param，等 Lua 注册后再在 GCS 改 |
 
 倾转参数用表键 89，`BTILT_HORIZ_R` 用表键 101，`BTILT_THR` / `BTILT_YAWDT` 用表键 100，`BTILT_QFRAC` 用表键 98。不注册尾桨表（102–104）。
 
 3. `QSTABILIZE` 解锁：S8/S11/S12 由混控驱动（尾电机跟俯仰/油门；S8 在 1000 以上怠速）。脚本不覆写电机。
 4. 过 `BTILT_QFRAC` 之后的 `MANUAL` / `STABILIZE`，Arm、油门最低：S11/S12 在各自 MIN 附近（电机基本停），S8 在 MIN（1000）附近停转。推油门后 S11/S12 一起升高；打偏航左右差动（`BTILT_YAWDT`，默认 0.1；反了改符号）。这是 Lua 按油门杆直通，不跟悬停油门。本机无空速计、无高度计；若交给固件，`STABILIZE` 会停在等空速的定高过渡里，主电机维持大约一半油门。
-5. `QSTABILIZE` → 固飞（`FLTMODE_CH=0`）：模式先保持 `QSTABILIZE`，GCS 见一次 `BTILT: qhold`。倾转按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）共模扫向 `BTILT_HORIZ_*`，这段 S8/S11/S12 仍是混控，没有 vectored yaw，也没有横滚差动。左右都过 `BTILT_QFRAC` 后见 `BTILT: qhold done`，才进入开关所选的固飞模式；电机约 300 ms 从混控油门收到固飞目标，剩余扫角可以差动。切回垂起（含扫到一半）立即进 `QSTABILIZE`，三电机交回混控；倾转由 Lua 按 `Q_TILT_RATE_UP` 从当前角扫回垂起（`BTILT: qrecover`），到位后再松开。直接松开会先跳到固件的完全朝前角。`BTILT_QFRAC=0` 则拨过去立刻进固飞。
+5. `QSTABILIZE` → 固飞（`FLTMODE_CH=0`）：模式先保持 `QSTABILIZE`，GCS 见一次 `BTILT: qhold`。倾转按 `Q_TILT_RATE_DN`（为 0 则用 `Q_TILT_RATE_UP`）共模扫向 `BTILT_HORIZ_*`，这段 S8/S11/S12 仍是混控，没有 vectored yaw，也没有横滚差动。左右都过 `BTILT_QFRAC` 后见 `BTILT: qhold done`，才进入开关所选的固飞模式；电机约 300 ms 从混控油门收到固飞目标，剩余扫角可以差动。切回垂起时，还在离水平 `(1-BTILT_QFRAC)` 以内（默认约 27°）先见 `BTILT: qback`：模式仍是原来的固飞模式，前电机跟油门杆和偏航差动，尾电机停转，倾转继续差动并按 `Q_TILT_RATE_UP` 往垂起角扫。左右都走出这段才进 `QSTABILIZE`（`BTILT: qrecover`），三电机交回混控；倾转仍由 Lua 扫回垂起角，到位后 `BTILT: qrecover done` 再松开。直接松开会先跳到固件的完全朝前角。去固飞扫到一半再拨回，不经过 `qback`，电机仍是混控。`BTILT_QFRAC=0` 则两个方向都立刻换控制律，回程倾转仍由 Lua 握住。
 6. 尾电调为单向 PWM（非 3D）；`SERVO8_MIN`/`TRIM=1000`。若电调仍是双向且 MIN=1000，油门最低会进反转区乱转。
 
 ## 4. 台架标定（拆桨）
@@ -195,7 +195,7 @@ python scripts/upload-lua.py --port COMx
 1. 模式切 **QSTABILIZE**、杆回中：倾转应在垂直附近；三只电机混控。
 2. 必要时改 `SERVO5/6_REVERSED`，使左右外段同向、电机轴朝上。
 3. 调 MIN/MAX 覆盖「水平以下极限 ↔ 垂直后再仰」，`Q_TILT_YAW_ANGLE` 与 MAX 侧后仰角一致。垂直两侧都要留出偏航矢量行程，否则大偏航时一侧顶死。
-4. 切 **MANUAL** / **STABILIZE**：前半段模式名仍是 **QSTABILIZE**，倾转共模扫向各自 `BTILT_HORIZ_*`，三电机仍是混控。过 `BTILT_QFRAC` 后才进入所选固飞模式，脚本把倾转收到水平并接管电机。保持期间无 vectored yaw、无固飞差动。拨回垂起后电机立刻交回混控，倾转由脚本扫回垂起角（`BTILT: qrecover`），不要先向下一跳。脚本失效且 `FLTMODE_CH=0` 时遥控不能换模式。
+4. 切 **MANUAL** / **STABILIZE**：前半段模式名仍是 **QSTABILIZE**，倾转共模扫向各自 `BTILT_HORIZ_*`，三电机仍是混控。过 `BTILT_QFRAC` 后才进入所选固飞模式，脚本把倾转收到水平并接管电机。保持期间无 vectored yaw、无固飞差动。再拨回垂起：还在离水平约 27° 以内时模式名不变，油门和副翼 / 方向仍是固飞那套（`BTILT: qback`）；走出这段才进 **QSTABILIZE**，电机交回混控（`BTILT: qrecover`）。倾转应连续扫回垂直，不要先向下一跳。脚本失效且 `FLTMODE_CH=0` 时遥控不能换模式。
 
 ### 4.1.1 垂起俯仰权威与大倾角排查（拆桨）
 
@@ -213,7 +213,7 @@ python scripts/upload-lua.py --port COMx
 1. 固飞模式、杆回中：分别调 `BTILT_HORIZ_L` / `BTILT_HORIZ_R`，使左右外段各自与中段**齐平**。
 2. 打横滚：过 `BTILT_QFRAC`、进入固飞之后应出现差动（含剩余扫角）。保持在 `QSTABILIZE` 的前半段只有共模倾转，横滚仍靠左右差推力。设计符号（`BTILT_REV=1`）：**向左滚** → 左外段减迎角、右外段增迎角（见 [固定翼形态-向左滚转图](./固定翼形态-向左滚转-副翼位置.jpg)）。右舵机镜像安装，脚本对左右写**同号** PWM 偏移；整体横滚反了把 `BTILT_REV` 设为 `-1`（改 `SERVO6_REVERSED` 无效，Lua 直写 PWM 绕过该参数）。
 3. `BTILT_TRAVEL` / `BTILT_GAIN`：从保守值加大，避免打满杆撞机械限位。
-4. 再切回 **QSTABILIZE**：电机会立刻交回混控。倾转应连续扫回垂直，不应先向下一跳；GCS 见 `BTILT: qrecover`，到位后 `BTILT: qrecover done`，之后偏航矢量由固件控制。
+4. 再切回 **QSTABILIZE**：还在离水平约 27° 以内时，油门最低 S11/S12/S8 应保持在 MIN 附近（不要跳到垂起怠速），打横滚仍是倾转差动，打偏航仍是左右推力差，GCS 先见 `BTILT: qback`。倾转离开水平约 27° 后模式才变成 **QSTABILIZE**，电机交回混控（`BTILT: qrecover`）。倾转应连续扫回垂直，不应先向下一跳；到位后 `BTILT: qrecover done`，之后偏航矢量由固件控制。
 
 ### 4.3 升降舵与电机
 
@@ -222,7 +222,7 @@ python scripts/upload-lua.py --port COMx
 
 ### 4.4 垂起尾电机与前后推力比（S8，拆桨）
 
-尾电机桨轴固定朝上，单向 PWM；`SERVO8_FUNCTION=36`，停转在 `SERVO8_MIN`/`TRIM=1000`。垂起由 QuadPlane 混控，固飞由 Lua 写在 MIN。离开固飞后三电机交回混控。S8 与升降舵同组，约 50 Hz，勿开 DShot。勿再用双向电调：MIN=1000 会进反转区。
+尾电机桨轴固定朝上，单向 PWM；`SERVO8_FUNCTION=36`，停转在 `SERVO8_MIN`/`TRIM=1000`。垂起由 QuadPlane 混控，固飞以及回垂起的水平段由 Lua 写在 MIN。走出这段、进入 `QSTABILIZE` 后三电机交回混控。S8 与升降舵同组，约 50 Hz，勿开 DShot。勿再用双向电调：MIN=1000 会进反转区。
 
 1. 锁定或固飞：S8 ≈ 1000，尾电机不转。固飞打俯仰、推油门时 S8 仍保持约 1000。
 2. **QSTABILIZE** 解锁、油门最低：S8 在 1000 以上怠速，随油门与俯仰变化（尾 vs 前对推力差）。
@@ -265,7 +265,7 @@ python scripts/upload-lua.py --port COMx
 - 若脚本已停、需要立刻用开关换模式：把 `FLTMODE_CH` 设回 8（`FLTMODE1..6` 仍是 `17,17,2,2,0,0`）。脚本恢复运行前不要留在 8，否则会和 Lua 抢模式。
 - 低速 / 应急：用**形态开关**切回垂起（`QSTABILIZE`）。勿在低速切固飞并停在 `MANUAL` 当应急。
 - 悬停 PID 保持默认角度/速率环结构，试飞后再微调 D/FF。项目 param 已把**手感**放软：`Q_M_THST_EXPO=0.80`、`Q_M_SLEW_UP_TIME=0.8`、`Q_M_SPIN_MIN=0.12`（离地不那么窜），`Q_A_INPUT_TC=0.25`、`Q_A_ANG_RLL/PIT_P=3.5`（打舵不那么贼）。`Q_ANGLE_MAX` 仍为 45°，满杆改出能力保留。若怠速不跟转，把 `Q_M_SPIN_MIN` 改回 0.15。
-- 过渡速率项目 param 已设 `Q_TILT_RATE_UP=90`、`Q_TILT_RATE_DN=90`（°/s），水平↔垂直约 90° 行程约 **1 s**；若实机角行程偏差可再微调。去固飞时 Lua 用 `Q_TILT_RATE_DN`（为 0 则用 UP），前 `BTILT_QFRAC`（默认 0.7）保持 `QSTABILIZE`；回垂起由 Lua 按 `Q_TILT_RATE_UP` 扫回，到位后才把倾转交还固件。台架验证时这两个速率会临时改慢。
+- 过渡速率项目 param 已设 `Q_TILT_RATE_UP=90`、`Q_TILT_RATE_DN=90`（°/s），水平↔垂直约 90° 行程约 **1 s**；若实机角行程偏差可再微调。去固飞时 Lua 用 `Q_TILT_RATE_DN`（为 0 则用 UP），走到离水平 `(1-BTILT_QFRAC)`（默认约 27°）才进入固飞。回垂起时同一段角度先保持固飞油门和差动（`BTILT: qback`），走出后才进 `QSTABILIZE`；倾转始终由 Lua 按 `Q_TILT_RATE_UP` 扫回，到位后才交还固件。默认 0.7、90 °/s 时这段大约 0.3 s。台架验证时这两个速率会临时改慢。
 - 垂起大俯仰后杆量纠正不回：先查 DesPitch 是否被 `PTCH_LIM_*` 卡住（应用 `Q_OPTIONS` bit14 + `Q_ANGLE_MAX=4500`），再查倾转 PWM 是否饱和（见 §4.1.1），并确认尾 Motor4 与 `Q_M_THST_FRONT/REAR`（见 §4.4）。
 
 ## 7. 日志诊断（`analyze-log.py`）

@@ -8,12 +8,23 @@
 --   - Overrides Motor2/Motor1 (front L/R) from RC throttle (+ yaw differential)
 --     so QuadPlane airspeed-wait hover thrust cannot hold the mains high
 --   - Holds Motor4 (tail) at SERVO MIN (stopped)
--- On leave FW (e.g. to QSTABILIZE):
---   - Motor overrides stop immediately so the tri mixer owns all three motors
---   - Tilt keeps being overridden and slews from the current PWM back to the
---     captured VTOL PWM at Q_TILT_RATE_UP. Releasing at once would show the
---     firmware's fully-forward output (past HORIZ, further down) for one
---     step, then slew up from there.
+-- On leave FW toward VTOL (FLTMODE_CH=0):
+--   - While the closer side is still inside the near-horizontal band
+--     (remain of TRIM->HORIZ <= 1-BTILT_QFRAC, ~27 deg at the default
+--     0.7), stay in the current STABILIZE/MANUAL. Both sides must leave
+--     that band before the mixer takes the motors. Tilt center slews
+--     toward the captured VTOL PWM at Q_TILT_RATE_UP with roll
+--     differential still applied, and motors stay on the FW throttle +
+--     yaw-diff law (BTILT: qback). Handing the mixer the motors while the
+--     nacelles are still level spools them to VTOL idle regardless of
+--     the FW throttle.
+--   - Once the slower side has left that band, enter QSTABILIZE and stop
+--     the motor override (BTILT: qrecover). Tilt keeps being overridden,
+--     now common-mode only, until it reaches the captured VTOL PWM.
+--     Releasing tilt at once would show the firmware's fully-forward
+--     output (past HORIZ, further down) for one step, then slew up.
+--   - QFRAC=0 skips the FW-law band (motors hand over immediately) but
+--     tilt is still slewed by this script.
 -- Steady VTOL: stock firmware owns tilt and all three motors (Motor1/2/4).
 --
 -- When FLTMODE_CH=0 the script owns the mode from CH8 (same six PWM
@@ -21,10 +32,9 @@
 -- common-mode only until both sides reach BTILT_QFRAC of the captured
 -- start->HORIZ travel; then it enters the selected FW mode, blends motors
 -- for a short interval, and the FW ramp above (with roll differential)
--- finishes the tilt. QFRAC=0 skips the hold. Switching back to VTOL enters
--- QSTABILIZE at once and slews tilt back (BTILT: qrecover) before vectored
--- yaw is released. FLTMODE_CH~=0 keeps the legacy path (FW mode
--- means take tilt and motors at once).
+-- finishes the tilt. That is the same angle as the FW-law band on the
+-- way back. QFRAC=0 skips both holds. FLTMODE_CH~=0 keeps the legacy path
+-- (FW mode means take tilt and motors at once; leaving FW releases both).
 --
 -- Deploy with: python scripts/upload-lua.py --config tilttri
 -- Requires SCR_ENABLE=1. Servo functions: 75/76 tilt (S5/S6),
@@ -38,8 +48,11 @@
 --   BTILT_REV     = 1 or -1; tilt roll sign
 --   BTILT_THR     = 1 enable FW motor override; 0 tilt-only
 --   BTILT_YAWDT   = yaw differential gain (-1..1; neg flips sign; ~0.1)
---   BTILT_QFRAC   = 0..1 fraction of start->HORIZ kept in QSTABILIZE
---                   when FLTMODE_CH=0; 0 skips the hold (default 0.7)
+--   BTILT_QFRAC   = 0..1. Near-horizontal band is the last (1-QFRAC) of
+--                   TRIM->HORIZ (default 0.7 → about 27 deg). VTOL->FW
+--                   stays in QSTABILIZE until both sides enter that band.
+--                   FW->VTOL keeps FW mode, throttle, aileron and yaw-diff
+--                   until both sides leave it. 0 skips both holds.
 --
 -- Tilt sign (REV=1): left roll -> left wing decrease AoA, right increase AoA.
 -- Right servo is mirrored: both sides use the same PWM offset (horiz_n - delta).
@@ -67,6 +80,8 @@ local Q = {
   HOLD = 1,
   FW = 2,
   RECOVER = 3,
+  -- FW laws while slewing back through the near-horizontal band.
+  BACK = 4,
   phase = 0,
   start_l = nil,
   start_r = nil,
@@ -580,9 +595,39 @@ local function ensure_mode(mode)
   end)
 end
 
--- Slew tilt back to the VTOL PWM captured at qhold entry. Motors are not
--- overridden here; mode is already QSTABILIZE so the tri mixer runs.
-local function update_recover()
+-- True while the closer side is still inside the near-horizontal band.
+-- QFRAC=0 is never inside it, so both directions hand control over at once.
+local function in_fw_band(cl, cr)
+  local qfrac = qfrac_value()
+  if qfrac <= 0 then
+    return false
+  end
+  local horiz_l = p_horiz_l:get()
+  local horiz_r = p_horiz_r:get()
+  if not horiz_l or not horiz_r then
+    return false
+  end
+  local nearest = math.min(
+    remain_frac(cl, horiz_l, tilt_left_trim),
+    remain_frac(cr, horiz_r, tilt_right_trim))
+  return nearest <= (1.0 - qfrac)
+end
+
+-- Motors go to the tri mixer. Tilt stays overridden by the caller.
+local function begin_mixer_recover()
+  gcs:send_text(6, 'BTILT: qrecover')
+  Q.phase = Q.RECOVER
+  was_fw = false
+  Q.blend_t0 = nil
+  ensure_mode(Q.QSTAB)
+end
+
+-- Slew the tilt center back to the VTOL PWM captured at qhold entry.
+-- with_diff: still in the near-horizontal band, so keep FW motors and roll
+-- differential. Crossing the band enters QSTABILIZE and drops the diff;
+-- the slew itself continues until the center arrives, so firmware cannot
+-- jump the nacelles past HORIZ.
+local function update_recover(with_diff)
   local horiz_l = p_horiz_l:get()
   local horiz_r = p_horiz_r:get()
   local rate = DEFAULT_TILT_RATE_DPS
@@ -596,12 +641,36 @@ local function update_recover()
   local step_r = ramp_max_step(tilt_right_trim, horiz_r or (tilt_right_trim + 1), rate)
   cur_l = approach(cur_l, Q.rec_l, step_l)
   cur_r = approach(cur_r, Q.rec_r, step_r)
-  local pwm_l = math.floor(cur_l + 0.5)
-  local pwm_r = math.floor(cur_r + 0.5)
+  if with_diff and not in_fw_band(cur_l, cur_r) then
+    begin_mixer_recover()
+    with_diff = false
+  end
+  local delta = 0
+  if with_diff then
+    local travel = p_travel:get()
+    local gain = p_gain:get()
+    local rev = p_rev:get()
+    if travel and gain and rev then
+      if travel < 0 then travel = 0 end
+      gain = clamp(gain, 0.0, 1.0)
+      if rev < 0 then
+        rev = -1
+      else
+        rev = 1
+      end
+      delta = roll_demand() * rev * travel * gain
+    end
+  end
+  local pwm_l = math.floor(cur_l - delta + 0.5)
+  local pwm_r = math.floor(cur_r - delta + 0.5)
   Q.out_l = pwm_l
   Q.out_r = pwm_r
   SRV_Channels:set_output_pwm_chan_timeout(tilt_left_chan, pwm_l, OVERRIDE_MS)
   SRV_Channels:set_output_pwm_chan_timeout(tilt_right_chan, pwm_r, OVERRIDE_MS)
+  if with_diff then
+    update_motors()
+    return
+  end
   if math.abs(cur_l - Q.rec_l) <= RAMP_EPS_PWM
     and math.abs(cur_r - Q.rec_r) <= RAMP_EPS_PWM then
     Q.phase = Q.VTOL
@@ -613,20 +682,26 @@ local function start_recover()
   if Q.phase == Q.HOLD then
     gcs:send_text(6, 'BTILT: qhold release')
   end
-  gcs:send_text(6, 'BTILT: qrecover')
+  Q.rec_l = Q.start_l or tilt_left_trim
+  Q.rec_r = Q.start_r or tilt_right_trim
+  Q.blend_t0 = nil
+  -- Only an already-FW tilt that is still near level keeps FW laws.
+  -- A VTOL->FW hold that has not crossed QFRAC is still on the mixer.
+  if Q.phase == Q.FW and in_fw_band(cur_l, cur_r) then
+    gcs:send_text(6, 'BTILT: qback')
+    Q.phase = Q.BACK
+    was_fw = true
+    update_recover(true)
+    return
+  end
   if Q.out_l then
     cur_l = Q.out_l
   end
   if Q.out_r then
     cur_r = Q.out_r
   end
-  Q.rec_l = Q.start_l or tilt_left_trim
-  Q.rec_r = Q.start_r or tilt_right_trim
-  Q.phase = Q.RECOVER
-  was_fw = false
-  Q.blend_t0 = nil
-  ensure_mode(Q.QSTAB)
-  update_recover()
+  begin_mixer_recover()
+  update_recover(false)
 end
 
 local function enter_fw_now(desired, recapture)
@@ -657,8 +732,10 @@ local function update_qhold()
   if desired == Q.QSTAB then
     if Q.phase == Q.HOLD or Q.phase == Q.FW then
       start_recover()
+    elseif Q.phase == Q.BACK then
+      update_recover(true)
     elseif Q.phase == Q.RECOVER then
-      update_recover()
+      update_recover(false)
     end
     return
   end
@@ -668,7 +745,7 @@ local function update_qhold()
   end
 
   local kept_pwm = false
-  if Q.phase == Q.RECOVER then
+  if Q.phase == Q.RECOVER or Q.phase == Q.BACK then
     Q.phase = Q.VTOL
     kept_pwm = true
   end
@@ -688,7 +765,9 @@ local function update_qhold()
     local now_r = kept_pwm and cur_r or read_tilt_pwm(K_TILT_RIGHT, tilt_right_trim)
     if qfrac <= 0 or not horiz_l or not horiz_r
       or not still_far(now_l, now_r, horiz_l, horiz_r, qfrac) then
-      enter_fw_now(desired, true)
+      -- kept_pwm: cur is already the slew center. Recapturing the servo
+      -- would fold an aileron offset into that center and apply it twice.
+      enter_fw_now(desired, not kept_pwm)
       return
     end
     Q.phase = Q.HOLD
