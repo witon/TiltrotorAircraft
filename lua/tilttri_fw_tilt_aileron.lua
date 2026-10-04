@@ -47,6 +47,9 @@
 --   BTILT_GAIN    = 0..1 scale on tilt travel
 --   BTILT_REV     = 1 or -1; tilt roll sign
 --   BTILT_THR     = 1 enable FW motor override; 0 tilt-only
+--   BTILT_THRK    = FW throttle slope (default 1.25). 1 = linear stick.
+--                   Higher matches VTOL mixer PWM at the same stick so the
+--                   QFRAC handoff does not step. Full stick saturates early.
 --   BTILT_YAWDT   = yaw differential gain (-1..1; neg flips sign; ~0.1)
 --   BTILT_QFRAC   = 0..1. Near-horizontal band is the last (1-QFRAC) of
 --                   TRIM->HORIZ (default 0.7 → about 27 deg). VTOL->FW
@@ -58,6 +61,7 @@
 -- Right servo is mirrored: both sides use the same PWM offset (horiz_n - delta).
 -- Yaw sign (YAWDT>0): right yaw stick -> left thrust up, right thrust down.
 -- Throttle uses the mapped RC channel MIN/MAX, not a fixed 1000..2000 span.
+-- FW throttle norm is scaled by BTILT_THRK before the yaw differential.
 
 local UPDATE_MS = 20
 local OVERRIDE_MS = 60
@@ -106,7 +110,8 @@ local K_MOTOR2 = 34
 local K_MOTOR4 = 36
 
 -- Tilt params use table key 89 (HORIZ_L, TRAVEL, GAIN, REV). Key 101: HORIZ_R.
--- Key 100 (size 2): FW throttle THR / YAWDT. Key 98 (size 1): QFRAC.
+-- Key 100 (size 2): FW throttle THR / YAWDT. Key 99 (size 1): THRK.
+-- Key 98 (size 1): QFRAC. Do not grow key 100; it is already size 2.
 -- Do not assert optional tables: a conflict must not kill tilt.
 -- Do not register tail tables (102-104).
 local PARAM_TABLE_KEY = 89
@@ -137,6 +142,13 @@ else
   gcs:send_text(4, 'BTILT: qfrac table unavailable, using 0.7')
 end
 
+-- Key 99 inline: a named local would push the main chunk toward the 100-local cap.
+if param:add_table(99, PARAM_TABLE_PREFIX, 1) then
+  param:add_param(99, 1, 'THRK', 1.25)
+else
+  gcs:send_text(4, 'BTILT: thrk table unavailable, using 1.25')
+end
+
 local function bind_param(name)
   local p = Parameter()
   if p:init(name) then
@@ -151,6 +163,7 @@ local p_travel = Parameter(PARAM_TABLE_PREFIX .. 'TRAVEL')
 local p_gain = Parameter(PARAM_TABLE_PREFIX .. 'GAIN')
 local p_rev = Parameter(PARAM_TABLE_PREFIX .. 'REV')
 local p_thr = bind_param(PARAM_TABLE_PREFIX .. 'THR')
+local p_thrk = bind_param(PARAM_TABLE_PREFIX .. 'THRK')
 local p_yawdt = bind_param(PARAM_TABLE_PREFIX .. 'YAWDT')
 local p_qfrac = bind_param(PARAM_TABLE_PREFIX .. 'QFRAC')
 
@@ -370,7 +383,7 @@ end
 
 -- FW motor targets. nil when override is off (no channels or BTILT_THR=0).
 -- Tail is always MIN. Disarmed fronts are MIN. Armed fronts follow throttle
--- plus yaw differential.
+-- scaled by BTILT_THRK, plus yaw differential.
 local function fw_motor_targets()
   if not mot1_chan and not mot2_chan and not mot4_chan then
     return nil
@@ -397,7 +410,16 @@ local function fw_motor_targets()
   end
   yawdt = clamp(yawdt, -1.0, 1.0)
 
-  local base = throttle_norm()
+  local thr_k = 1.25
+  if p_thrk then
+    local v = p_thrk:get()
+    if v then
+      thr_k = v
+    end
+  end
+  thr_k = clamp(thr_k, 0.2, 3.0)
+
+  local base = clamp(throttle_norm() * thr_k, 0.0, 1.0)
   -- Right yaw (+): left (Motor2) up, right (Motor1) down
   local diff = 0.5 * stick_norm(yaw_rc_chan) * yawdt
   local left = clamp(base + diff, 0.0, 1.0)

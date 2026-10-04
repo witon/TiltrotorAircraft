@@ -143,10 +143,11 @@ python scripts/upload-lua.py --port COMx
 | `BTILT_GAIN` | 0.24 | 倾转差动增益 0..1（由低到高试） |
 | `BTILT_REV` | 1 | 倾转横滚符号：`1` 或 `-1`，反了改符号 |
 | `BTILT_THR` | 1 | `1` 固飞前电机按油门杆直通；`0` 仅倾转 |
+| `BTILT_THRK` | 1.25 | 固飞油门斜率，0.2..3。越大，同一杆位前电机 PWM 越高；`1` 为直线。用来衔接垂起混控，避免过 `QFRAC` 时油门台阶。拆桨、油门停在过渡常用杆位，来回过 `QFRAC`，S11/S12 不再跳再存参。默认约 80% 杆即满油门。不写入 project param，等 Lua 注册后再在 GCS 改 |
 | `BTILT_YAWDT` | 0.1 | 固飞偏航差动增益 -1..1（负号反转） |
 | `BTILT_QFRAC` | 0.7 | `FLTMODE_CH=0` 时，离水平最后 `(1-QFRAC)` 行程（默认约 27°）用固飞律，更立的一段用垂起律。0 = 两边都立刻换控制律。不写入 project param，等 Lua 注册后再在 GCS 改 |
 
-倾转参数用表键 89，`BTILT_HORIZ_R` 用表键 101，`BTILT_THR` / `BTILT_YAWDT` 用表键 100，`BTILT_QFRAC` 用表键 98。不注册尾桨表（102–104）。
+倾转参数用表键 89，`BTILT_HORIZ_R` 用表键 101，`BTILT_THR` / `BTILT_YAWDT` 用表键 100，`BTILT_THRK` 用表键 99，`BTILT_QFRAC` 用表键 98。不扩表键 100，不注册尾桨表（102–104）。
 
 3. `QSTABILIZE` 解锁：S8/S11/S12 由混控驱动（尾电机跟俯仰/油门；S8 在 1000 以上怠速）。脚本不覆写电机。
 4. 过 `BTILT_QFRAC` 之后的 `MANUAL` / `STABILIZE`，Arm、油门最低：S11/S12 在各自 MIN 附近（电机基本停），S8 在 MIN（1000）附近停转。推油门后 S11/S12 一起升高；打偏航左右差动（`BTILT_YAWDT`，默认 0.1；反了改符号）。这是 Lua 按油门杆直通，不跟悬停油门。本机无空速计、无高度计；若交给固件，`STABILIZE` 会停在等空速的定高过渡里，主电机维持大约一半油门。
