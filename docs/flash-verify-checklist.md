@@ -21,7 +21,7 @@
 
 - [ ] 设备管理器出现 COM 口
 - [ ] 115200 连接成功
-- [ ] 显示 ArduPlane / MatekH743（自定义应为 `V4.6.3-thstfac`）
+- [ ] 显示 ArduPlane / MatekH743（自定义应为 `V4.6.3-thstfac-qyawclr`）
 - [ ] 已记录固件版本
 
 | 项目 | 值 |

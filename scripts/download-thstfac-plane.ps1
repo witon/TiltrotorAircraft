@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Download ArduPlane V4.6.3-thstfac (MatekH743) built on GitHub Actions.
+  Download ArduPlane V4.6.3-thstfac-qyawclr (MatekH743) built on GitHub Actions.
 
 .DESCRIPTION
   Fetches the rolling Release tag firmware-thstfac into
@@ -85,7 +85,7 @@ Write-Host ""
 Write-Host "Done."
 Write-Host "First flash (DFU):  $(Join-Path $OutDir 'arduplane_with_bl.hex')"
 Write-Host "Later update (MP):  $(Join-Path $OutDir 'arduplane.apj')"
-Write-Host "GCS version must be ArduPlane V4.6.3-thstfac"
+Write-Host "GCS version must be ArduPlane V4.6.3-thstfac-qyawclr"
 
 $VersionFile = Join-Path $OutDir "firmware-version.txt"
 if (Test-Path $VersionFile) {

@@ -4,11 +4,11 @@
 
 | 机架 | Lua |
 |------|-----|
-| `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`；尾电机 Motor4；Lua 固飞差动倾转 + 前电机油门直通（无空速/高度，不走等空速定高）。前后电机功率不同时用自编译 `V4.6.3-thstfac` 的 `Q_M_THST_FRONT` / `Q_M_THST_REAR` | [`tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) |
+| `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`；尾电机 Motor4；Lua 固飞差动倾转 + 前电机油门直通（无空速/高度，不走等空速定高）。前后电机功率不同时用自编译 `V4.6.3-thstfac-qyawclr` 的 `Q_M_THST_FRONT` / `Q_M_THST_REAR` | [`tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua) |
 
 参数在 [`params/configs/tilttri/`](../params/configs/tilttri/)。`upload-lua.py` 会删除 SD 上已退役的 `bicopter_fw_tilt_aileron.lua`，避免和当前脚本抢输出。
 
-等功率三旋翼可用官方 Plane。前对大电机 + 小尾桨需要 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md) 里的 **V4.6.3-thstfac** 自定义固件（只编译一次；比例在地面站改参）。
+等功率三旋翼可用官方 Plane。前对大电机 + 小尾桨需要 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md) 里的 **V4.6.3-thstfac-qyawclr** 自定义固件（只编译一次；比例在地面站改参）。
 
 ## 1. 刷固件
 
@@ -25,7 +25,7 @@
    工作流：仓库 **Actions** → **Build MatekH743 Plane** → **Run workflow**。说明见 [matek-h743-mini-v3-flash.md](./matek-h743-mini-v3-flash.md)。
 2. **首次**：按住 Boot，用 STM32CubeProgrammer（或 dfu-util）烧写 `firmware/Plane/stable/MatekH743/arduplane_with_bl.hex`（官方）或 `firmware/Plane/custom/MatekH743/arduplane_with_bl.hex`（thstfac）。
 3. **已装 ArduPilot 后升级**：Mission Planner → **Install Firmware** → Load custom firmware → 对应目录的 `arduplane.apj`。**不等功率不要从在线列表选 MatekH743 Plane**，会盖掉 `THST_FRONT/REAR` 混控。
-4. 自定义固件 GCS 应显示 **ArduPlane V4.6.3-thstfac**。官方固件含 **Scripting**（近年 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
+4. 自定义固件 GCS 应显示 **ArduPlane V4.6.3-thstfac-qyawclr**。官方固件含 **Scripting**（近年 Plane 默认包含；若无 `SCR_ENABLE`，换较新稳定版）。
 5. 刷写完成后连接飞控（115200），不要急着装桨。验证清单：[flash-verify-checklist.md](./flash-verify-checklist.md)。
 
 ## 2. 导入参数
@@ -106,7 +106,7 @@ python scripts/export-aircraft-calib.py --port COMx --aircraft 01
 | 机架 | `Q_FRAME_CLASS=7`，`Q_TILT_TYPE=2`，`Q_TILT_MASK=3`，`Q_TILT_RATE_UP/DN=27`（约 90° 行程约 3.3 s），`Q_ASSIST_SPEED=-1`，`SCHED_LOOP_RATE=300` |
 | 输出 | S5=75，S6=76，S7=19，S8=**36**（Motor4，`MIN`/`TRIM=1000`），S11=**34**，S12=**33** |
 | 尾电调 | 单向 PWM；停转在 MIN；约 50 Hz |
-| 前后推力比 | 需固件 `V4.6.3-thstfac`。`Q_M_THST_FRONT` / `Q_M_THST_REAR`：1.0 为等功率；本仓库 project 为 0.8 / 1.2（01 号机台架）。同一油门下前对 PWM 仍明显高于尾则再降 FRONT；尾贴怠速且 S8 未到 MAX 可略升 REAR。写入 `aircraft/NN.param`，不必再编译。 |
+| 前后推力比 | 需固件 `V4.6.3-thstfac-qyawclr`。`Q_M_THST_FRONT` / `Q_M_THST_REAR`：1.0 为等功率；本仓库 project 为 0.8 / 1.2（01 号机台架）。同一油门下前对 PWM 仍明显高于尾则再降 FRONT；尾贴怠速且 S8 未到 MAX 可略升 REAR。写入 `aircraft/NN.param`，不必再编译。 |
 
 `Q_TILT_YAW_ANGLE`、倾转 `SERVO*_MIN/TRIM/MAX`、`BTILT_*` 为占位，台架后改写，并用 §2.3 导出到机号文件。本项目不做电池监测标定与罗盘校准。
 
@@ -183,7 +183,7 @@ python scripts/upload-lua.py --port COMx
 | `SERVO7_MIN` / `TRIM` / `MAX` | 1000 / 1500 / 2000 | 平尾行程端点与中立 |
 | `SERVO7_REVERSED` | 0 | 固飞俯仰方向正确 |
 | `SERVO8_MIN` / `TRIM` / `MAX` | 1000 / 1000 / 2000 | Motor4 单向电调；MIN/TRIM=停转 |
-| `Q_M_THST_FRONT` / `Q_M_THST_REAR` | 0.8 / 1.2 | 前后 PWM 比例；等功率改为 1.0。须 `V4.6.3-thstfac` |
+| `Q_M_THST_FRONT` / `Q_M_THST_REAR` | 0.8 / 1.2 | 前后 PWM 比例；等功率改为 1.0。须 `V4.6.3-thstfac-qyawclr` |
 | `SERVO11_REVERSED` / `SERVO12_REVERSED` | 0 | 对转方向按机身要求 |
 | `SERVO11/12_MIN` / `TRIM` / `MAX` | 1000 / 1000 / 2000 | 一般可沿用；电调校准区不同再微调 |
 
@@ -227,7 +227,7 @@ python scripts/upload-lua.py --port COMx
 
 1. 锁定或固飞：S8 ≈ 1000，尾电机不转。固飞打俯仰、推油门时 S8 仍保持约 1000。
 2. **QSTABILIZE** 解锁、油门最低：S8 在 1000 以上怠速，随油门与俯仰变化（尾 vs 前对推力差）。
-3. **前后电机功率不同**（本机小有刷尾桨）：必须刷 `ArduPlane V4.6.3-thstfac`。拆桨后改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`（project 为 0.8 / 1.2）。同一油门下前对 PWM 仍明显高于尾则降低 FRONT；打俯仰时前对 PWM 变化也应同比缩小。尾贴怠速但 S8 未到 MAX 可略升 REAR。写好后存 `aircraft/NN.param`，用 `upload-params.py --mode incremental --aircraft NN`。系数只改 PWM，补不出尾电机没有的推力。官方 4.6.3 无这两项参数。混控公式自检（不连飞控）：`python scripts/tri-thst-mix-check.py`。
+3. **前后电机功率不同**（本机小有刷尾桨）：必须刷 `ArduPlane V4.6.3-thstfac-qyawclr`。拆桨后改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`（project 为 0.8 / 1.2）。同一油门下前对 PWM 仍明显高于尾则降低 FRONT；打俯仰时前对 PWM 变化也应同比缩小。尾贴怠速但 S8 未到 MAX 可略升 REAR。写好后存 `aircraft/NN.param`，用 `upload-params.py --mode incremental --aircraft NN`。系数只改 PWM，补不出尾电机没有的推力。官方 4.6.3 无这两项参数。混控公式自检（不连飞控）：`python scripts/tri-thst-mix-check.py`。
 4. 标定导出：`export-aircraft-calib.py --aircraft NN`。
 
 ## 5. EdgeTX：形态 / 固飞模式 → CH8

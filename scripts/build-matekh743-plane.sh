@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Clone Plane-4.6.3, apply TRI THST_FRONT/REAR patch, build MatekH743 Plane.
+# Clone Plane-4.6.3, apply TRI thrust-scale then qyawclr, build MatekH743 Plane.
 # Prefer GitHub Actions (.github/workflows/build-matekh743-plane.yml).
 # Local: WSL/Linux only (not native Windows PowerShell).
 set -euo pipefail
@@ -9,6 +9,7 @@ BOARD="MatekH743"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 APPLY="$REPO_ROOT/firmware/patches/plane-4.6.3/apply.py"
+APPLY_YAW="$REPO_ROOT/firmware/patches/plane-4.6.3/apply-qyawclr.py"
 OUT_DIR="$REPO_ROOT/firmware/Plane/custom/$BOARD"
 CACHE_DIR="${TILTROTOR_ARDUPILOT_CACHE:-$HOME/.cache/TiltrotorAircraft}"
 SRC="$CACHE_DIR/ardupilot-$TAG"
@@ -22,8 +23,8 @@ do
   fi
 done
 
-if [[ ! -f "$APPLY" ]]; then
-  echo "missing $APPLY" >&2
+if [[ ! -f "$APPLY" || ! -f "$APPLY_YAW" ]]; then
+  echo "missing $APPLY or $APPLY_YAW" >&2
   exit 1
 fi
 
@@ -44,6 +45,7 @@ else
 fi
 
 python3 "$APPLY" "$SRC"
+python3 "$APPLY_YAW" "$SRC"
 
 cd "$SRC"
 if [[ ! -x waf ]]; then
@@ -69,7 +71,7 @@ if [[ ! -s "$OUT_DIR/arduplane.apj" ]]; then
 fi
 
 {
-  echo "$TAG-thstfac"
+  echo "$TAG-thstfac-qyawclr"
   echo "board=$BOARD"
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 } > "$OUT_DIR/firmware-version.txt"
@@ -77,5 +79,5 @@ fi
 echo ""
 echo "Done. Flash with Mission Planner Load custom firmware:"
 echo "  $OUT_DIR/arduplane.apj"
-echo "GCS should show: ArduPlane V4.6.3-thstfac"
-echo "Do not use the online MatekH743 Plane list or you will overwrite this mix."
+echo "GCS should show: ArduPlane V4.6.3-thstfac-qyawclr"
+echo "Do not use the online MatekH743 Plane list or you will overwrite this mix and the yaw clear."

@@ -13,9 +13,9 @@
 | 首次 DFU 刷写（含 bootloader） | `arduplane_with_bl.hex` | [Plane/stable/MatekH743](https://firmware.ardupilot.org/Plane/stable/MatekH743/) |
 | 已装 ArduPilot 后的升级 | `arduplane.apj` | 同上 |
 | 双向 DShot（可选） | `MatekH743-bdshot` 目录下对应文件 | [Plane/stable/MatekH743-bdshot](https://firmware.ardupilot.org/Plane/stable/MatekH743-bdshot/) |
-| 前后推力比（自定义） | `firmware/Plane/custom/MatekH743/arduplane.apj` | GitHub Actions 编译；`.\scripts\download-thstfac-plane.ps1` 下载 `V4.6.3-thstfac` |
+| 前后推力比 + 过渡清偏航（自定义） | `firmware/Plane/custom/MatekH743/arduplane.apj` | GitHub Actions 编译；`.\scripts\download-thstfac-plane.ps1` 下载 `V4.6.3-thstfac-qyawclr` |
 
-等功率用 **stable** 官方包。前对大电机 + 小尾桨刷 **thstfac** 自定义包；GCS 版本须为 `ArduPlane V4.6.3-thstfac`。之后只改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`，不必再编译。不要用 Mission Planner 在线 MatekH743 Plane 覆盖这套固件。
+等功率用 **stable** 官方包。前对大电机 + 小尾桨刷自定义包；GCS 版本须为 `ArduPlane V4.6.3-thstfac-qyawclr`（前后推力比，并在倾转共模覆写期间清偏航）。之后只改 `Q_M_THST_FRONT` / `Q_M_THST_REAR`，不必再编译。不要用 Mission Planner 在线 MatekH743 Plane 覆盖这套固件。
 
 本地下载官方包：
 
@@ -145,5 +145,5 @@ RC：默认可用 Rx6；CRSF/ELRS 等双向协议需 `BRD_ALT_CONFIG=1`，并将
 
 - 刷入 `with_bl.hex` 会写入 ArduPilot bootloader，后续主要走 ArduPilot 升级路径；若要切回 Betaflight / INAV，需再次 DFU 刷对应固件。
 - `MatekH743-bdshot` 会改变 Rx6 与部分 PWM 行为，使用前阅读官方 Warning。
-- 自定义 `V4.6.3-thstfac` 与官方 4.6.3 参数表不完全相同；换回官方固件后 `Q_M_THST_FRONT/REAR` 会消失，三旋翼混控回到等功率。
+- 自定义 `V4.6.3-thstfac-qyawclr` 与官方 4.6.3 参数表不完全相同；换回官方固件后 `Q_M_THST_FRONT/REAR` 会消失，三旋翼混控回到等功率，过渡清偏航也不再有。
 - H7 偶发起机异常时，查阅官方文档 *When Problems Arise* 中 H7 相关说明。

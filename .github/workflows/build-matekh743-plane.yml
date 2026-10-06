@@ -1,4 +1,4 @@
-# 在 GitHub 上编译 Plane-4.6.3-thstfac（MatekH743）。本机不必装 WSL。
+# 在 GitHub 上编译 Plane-4.6.3-thstfac-qyawclr（MatekH743）。本机不必装 WSL。
 # 手动：Actions → Build MatekH743 Plane → Run workflow
 # 产物：Release tag firmware-thstfac，以及本 run 的 Artifact。
 name: Build MatekH743 Plane
@@ -109,15 +109,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: firmware-thstfac
-          name: ArduPlane V4.6.3-thstfac (MatekH743)
+          name: ArduPlane V4.6.3-thstfac-qyawclr (MatekH743)
           prerelease: true
           make_latest: false
           body: |
-            自定义 TRI 前后推力比固件（`ArduPlane V4.6.3-thstfac` / MatekH743）。
+            自定义 MatekH743 固件（`ArduPlane V4.6.3-thstfac-qyawclr`）。
+
+            - TRI 前后推力比：`Q_M_THST_FRONT` / `Q_M_THST_REAR`
+            - 倾转共模覆写（qhold / qrecover）期间清掉偏航目标、角速度和 I 项
 
             - 已装 ArduPilot：Mission Planner → **Load custom firmware** → `arduplane.apj`
             - 首次 DFU：`arduplane_with_bl.hex`
-            - 不要用在线 MatekH743 Plane 列表覆盖，否则会丢掉 `Q_M_THST_FRONT/REAR`
+            - 不要用在线 MatekH743 Plane 列表覆盖，否则会丢掉前后推力比和过渡清偏航
 
             本机下载：`.\scripts\download-thstfac-plane.ps1`
           files: |
