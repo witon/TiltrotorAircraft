@@ -15,9 +15,9 @@ Q_FRAME_CLASS,7
 Q_TILT_TYPE,2
 Q_TILT_MASK,3
 Q_TILT_YAW_ANGLE,15
-# Bench check of qhold: 9 is 10x slower than the 90 deg/s flight rate (~10 s for 90 deg).
-Q_TILT_RATE_UP,9
-Q_TILT_RATE_DN,9
+# VTOL<->FW tilt slew: 27 deg/s is 3x the previous 9 (~3.3 s for 90 deg).
+Q_TILT_RATE_UP,27
+Q_TILT_RATE_DN,27
 Q_ASSIST_SPEED,-1
 Q_OPTIONS,16384
 Q_ANGLE_MAX,4500
