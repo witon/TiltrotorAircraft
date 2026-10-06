@@ -4,7 +4,7 @@
   Optional local WSL build of patched ArduPlane MatekH743.
 
 .DESCRIPTION
-  Prefer GitHub Actions: push, then .\scripts\download-thstfac-plane.ps1
+  Prefer GitHub Actions: push, then .\scripts\download-qyaw-plane.ps1
   Native Windows cannot run ArduPilot waf. This wrapper calls the bash script
   inside WSL. Install WSL2 Ubuntu first: wsl --install -d Ubuntu
 #>

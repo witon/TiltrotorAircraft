@@ -2,7 +2,7 @@
 
 本机为 **双旋翼倾转翼（Tilt-Wing）**：外段主翼与电机一体倾转。飞控 **Matek H743-MINI V3**（ArduPlane），遥控 RadioMaster **Zorro**（ELRS）+ **ER6GV**（CRSF）。执行机构全部由飞控 PWM 驱动；接收机不直驱舵机/电调。
 
-固件机架为 **Tilt-Tri + vectored yaw**（`Q_FRAME_CLASS=7`，`--config tilttri`）。尾电机是原生 Motor4（`FUNCTION=36`）。等功率用官方 Plane；前大后小用自编译 `V4.6.3-thstfac` + `Q_M_THST_FRONT/REAR`。参数与 Lua 见 [ardupilot-setup.md](./ardupilot-setup.md)。
+固件机架为 **Tilt-Tri + vectored yaw**（`Q_FRAME_CLASS=7`，`--config tilttri`）。尾电机是原生 Motor4（`FUNCTION=36`）。等功率用官方 Plane；前大后小用自编译 `V4.6.3-thstfac-qyaw`（含 `Q_M_THST_FRONT/REAR`，以及过渡共模上衰减的 vectored yaw）。参数与 Lua 见 [ardupilot-setup.md](./ardupilot-setup.md)。
 
 ## 气动 / 机体布局
 
@@ -234,7 +234,7 @@ flowchart LR
 - [ ] 仅一路 BEC 5V；舵机轨与接收机、飞控信号地共地
 - [ ] S5 / S6 / S7 / S8 / S11 / S12 功能号与上表一致
 - [ ] `SCR_ENABLE=1`；SD 上只有 [`tilttri_fw_tilt_aileron.lua`](../lua/tilttri_fw_tilt_aileron.lua)（`upload-lua.py` 会删掉已退役的 bicopter 脚本）
-- [ ] GCS 见 `BTILT: tilttri fw tilt+throttle running`；固飞油门最低时 S11/S12 在 MIN 附近，推油门才升高；垂起三电机混控；固飞尾电机停（MIN=1000）。不等功率尾桨：GCS 为 `V4.6.3-thstfac`，拆桨标定 `Q_M_THST_FRONT/REAR`
+- [ ] GCS 见 `BTILT: tilttri fw tilt+throttle running`；固飞油门最低时 S11/S12 在 MIN 附近，推油门才升高；垂起三电机混控；固飞尾电机停（MIN=1000）。不等功率尾桨：GCS 为 `V4.6.3-thstfac-qyaw`，拆桨标定 `Q_M_THST_FRONT/REAR`
 
 ## 未记录规格
 

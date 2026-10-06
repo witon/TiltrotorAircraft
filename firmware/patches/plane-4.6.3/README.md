@@ -13,4 +13,4 @@
 python firmware/patches/plane-4.6.3/apply.py /path/to/ardupilot
 ```
 
-编译在 GitHub Actions（[`.github/workflows/build-matekh743-plane.yml`](../../../.github/workflows/build-matekh743-plane.yml)）。本机下载：`.\scripts\download-thstfac-plane.ps1`。可选本地 WSL：[`scripts/build-matekh743-plane.sh`](../../../scripts/build-matekh743-plane.sh)。
+编译在 GitHub Actions（[`.github/workflows/build-matekh743-plane.yml`](../../../.github/workflows/build-matekh743-plane.yml)）。本分支的组合包（推力比 + 过渡偏航）下载：`.\scripts\download-qyaw-plane.ps1`（标签 `firmware-qyaw`）。可选本地 WSL：[`scripts/build-matekh743-plane.sh`](../../../scripts/build-matekh743-plane.sh)。

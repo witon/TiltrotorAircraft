@@ -2,7 +2,7 @@
 
 双旋翼倾转翼（Tilt-Wing）说明。飞控默认 Matek H743-MINI V3（ArduPlane）。
 
-机架为 Tilt-Tri vectored yaw（`--config tilttri`，默认）。尾电机为 Motor4；Lua 做固飞差动倾转和前电机油门直通。不等功率尾桨需自编译 `V4.6.3-thstfac`。
+机架为 Tilt-Tri vectored yaw（`--config tilttri`，默认）。尾电机为 Motor4；Lua 做固飞差动倾转和前电机油门直通。不等功率尾桨需自编译 `V4.6.3-thstfac-qyaw`。
 
 | 参数 | Lua |
 |------|-----|
@@ -23,8 +23,11 @@
 # 下载官方 Plane MatekH743 固件到 firmware/
 .\scripts\download-matekh743-plane.ps1
 
-# 不等功率 tilttri：从 GitHub Release 下载 V4.6.3-thstfac（无需本机编译）
-.\scripts\download-thstfac-plane.ps1
+# 不等功率 tilttri：从 GitHub Release 下载 V4.6.3-thstfac-qyaw（无需本机编译）
+.\scripts\download-qyaw-plane.ps1
+
+# 过渡偏航衰减公式自检（不连飞控）
+python scripts/qyaw-fade-check.py
 
 # 混控前后比公式自检（不连飞控）
 python scripts/tri-thst-mix-check.py

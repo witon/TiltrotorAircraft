@@ -30,7 +30,11 @@
 -- When FLTMODE_CH=0 the script owns the mode from CH8 (same six PWM
 -- slots as Plane). A VTOL->FW request stays in QSTABILIZE and slews tilt
 -- common-mode only until both sides reach BTILT_QFRAC of the captured
--- start->HORIZ travel; then it enters the selected FW mode, blends motors
+-- start->HORIZ travel. That PWM is only the center: firmware
+-- V4.6.3-thstfac-qyaw adds the attitude controller's vectored yaw on
+-- top and fades it with forward tilt. Do not add a stick yaw term here.
+-- The override hides the controller output, so a stick term cannot
+-- unwind angle error or I. Then it enters the selected FW mode, blends motors
 -- for a short interval, and the FW ramp above (with roll differential)
 -- finishes the tilt. That is the same angle as the FW-law band on the
 -- way back. QFRAC=0 skips both holds. FLTMODE_CH~=0 keeps the legacy path

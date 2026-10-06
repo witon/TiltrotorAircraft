@@ -1,6 +1,7 @@
-# 在 GitHub 上编译 Plane-4.6.3-thstfac（MatekH743）。本机不必装 WSL。
+# 在 GitHub 上编译 Plane-4.6.3-thstfac-qyaw（MatekH743）。本机不必装 WSL。
 # 手动：Actions → Build MatekH743 Plane → Run workflow
-# 产物：Release tag firmware-thstfac，以及本 run 的 Artifact。
+# 产物：Release tag firmware-qyaw，以及本 run 的 Artifact。
+# 不要把产物发到 firmware-thstfac：方案 A 分支占用那个标签。
 name: Build MatekH743 Plane
 
 on:
@@ -8,11 +9,15 @@ on:
   push:
     paths:
       - "firmware/patches/plane-4.6.3/**"
+      - "firmware/patches/plane-4.6.3-qyaw/**"
+      - "scripts/qyaw-fade-check.py"
       - "scripts/build-matekh743-plane.sh"
       - ".github/workflows/build-matekh743-plane.yml"
   pull_request:
     paths:
       - "firmware/patches/plane-4.6.3/**"
+      - "firmware/patches/plane-4.6.3-qyaw/**"
+      - "scripts/qyaw-fade-check.py"
       - "scripts/build-matekh743-plane.sh"
       - ".github/workflows/build-matekh743-plane.yml"
 
@@ -30,6 +35,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: TRI mix scale sanity
         run: python3 scripts/tri-thst-mix-check.py
+      - name: Transition yaw fade sanity
+        run: python3 scripts/qyaw-fade-check.py
 
   build:
     needs: mix-check
@@ -71,7 +78,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/TiltrotorAircraft
-          key: ardupilot-Plane-4.6.3-${{ hashFiles('firmware/patches/plane-4.6.3/**') }}
+          key: ardupilot-Plane-4.6.3-qyaw-${{ hashFiles('firmware/patches/plane-4.6.3/**', 'firmware/patches/plane-4.6.3-qyaw/**') }}
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -95,7 +102,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: matekh743-plane-thstfac
+          name: matekh743-plane-qyaw
           path: |
             firmware/Plane/custom/MatekH743/arduplane.apj
             firmware/Plane/custom/MatekH743/arduplane_with_bl.hex
@@ -104,22 +111,26 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish rolling Release firmware-thstfac
+      - name: Publish rolling Release firmware-qyaw
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: firmware-thstfac
-          name: ArduPlane V4.6.3-thstfac (MatekH743)
+          tag_name: firmware-qyaw
+          name: ArduPlane V4.6.3-thstfac-qyaw (MatekH743)
           prerelease: true
           make_latest: false
           body: |
-            自定义 TRI 前后推力比固件（`ArduPlane V4.6.3-thstfac` / MatekH743）。
+            自定义 MatekH743 固件（`ArduPlane V4.6.3-thstfac-qyaw`）。
+
+            - TRI 前后推力比：`Q_M_THST_FRONT` / `Q_M_THST_REAR`
+            - 倾转共模覆写（qhold / qrecover）期间，把 vectored yaw 叠到共模中心上，并随前倾角衰减
 
             - 已装 ArduPilot：Mission Planner → **Load custom firmware** → `arduplane.apj`
             - 首次 DFU：`arduplane_with_bl.hex`
-            - 不要用在线 MatekH743 Plane 列表覆盖，否则会丢掉 `Q_M_THST_FRONT/REAR`
+            - 不要用在线 MatekH743 Plane 列表覆盖，否则会丢掉前后推力比和过渡偏航
 
-            本机下载：`.\scripts\download-thstfac-plane.ps1`
+            本机下载：`.\scripts\download-qyaw-plane.ps1`
+            不要覆盖 Release 标签 `firmware-thstfac`（方案 A 使用那个标签）。
           files: |
             firmware/Plane/custom/MatekH743/arduplane.apj
             firmware/Plane/custom/MatekH743/arduplane_with_bl.hex
