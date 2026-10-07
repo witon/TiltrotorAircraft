@@ -21,8 +21,11 @@
 --   - Once the slower side has left that band, enter QSTABILIZE and stop
 --     the motor override (BTILT: qrecover). Tilt keeps being overridden,
 --     now common-mode only, until it reaches the captured VTOL PWM.
---     Releasing tilt at once would show the firmware's fully-forward
---     output (past HORIZ, further down) for one step, then slew up.
+--     Firmware current_tilt stays parked through qhold and only slews
+--     forward after the FW mode change, then back only after qrecover.
+--     Lua's PWM usually arrives first. Keep holding the vertical center
+--     until that return slew can finish, or the handoff steps forward
+--     by the leftover angle and slews home.
 --   - QFRAC=0 skips the FW-law band (motors hand over immediately) but
 --     tilt is still slewed by this script.
 -- Steady VTOL: stock firmware owns tilt and all three motors (Motor1/2/4).
@@ -104,6 +107,10 @@ local Q = {
   rec_r = nil,
   out_l = nil,
   out_r = nil,
+  -- millis when FW mode started the firmware's 0→90 slew. nil if it never left VTOL.
+  fw_since = nil,
+  -- millis when the vertical hold may be released. nil until qrecover.
+  rel_at = nil,
 }
 
 local K_TILT_LEFT = 75
@@ -640,19 +647,47 @@ local function in_fw_band(cl, cr)
 end
 
 -- Motors go to the tri mixer. Tilt stays overridden by the caller.
+-- Firmware's return toward 0 starts at this mode change, from the forward
+-- angle it reached after fw_since (capped at 90). Remember when that slew
+-- can finish so the vertical PWM is not released early.
 local function begin_mixer_recover()
   gcs:send_text(6, 'BTILT: qrecover')
   Q.phase = Q.RECOVER
   was_fw = false
   Q.blend_t0 = nil
+  local rate_up = DEFAULT_TILT_RATE_DPS
+  if have_rate_up then
+    local up = p_tilt_rate_up:get()
+    if up and up > 0 then
+      rate_up = up
+    end
+  end
+  local deg = 0
+  if Q.fw_since then
+    local elapsed = now_ms() - Q.fw_since
+    if elapsed < 0 then
+      elapsed = 0
+    end
+    deg = tilt_rate_dps() * (elapsed / 1000.0)
+    if deg > TRIM_HORIZ_DEG then
+      deg = TRIM_HORIZ_DEG
+    end
+  end
+  if rate_up < 1 then
+    rate_up = 1
+  end
+  -- Pad past the last override window so a 1-loop timing error cannot step.
+  -- now_ms() is required: millis() is uint32 userdata, and math.floor rejects it.
+  Q.rel_at = now_ms() + (deg / rate_up * 1000.0 + OVERRIDE_MS)
   ensure_mode(Q.QSTAB)
 end
 
 -- Slew the tilt center back to the VTOL PWM captured at qhold entry.
 -- with_diff: still in the near-horizontal band, so keep FW motors and roll
 -- differential. Crossing the band enters QSTABILIZE and drops the diff;
--- the slew itself continues until the center arrives, so firmware cannot
--- jump the nacelles past HORIZ.
+-- the slew itself continues until the center arrives. After that, keep
+-- the vertical center until Q.rel_at so firmware's slower internal angle
+-- is also home before the override drops.
 local function update_recover(with_diff)
   local horiz_l = p_horiz_l:get()
   local horiz_r = p_horiz_r:get()
@@ -699,8 +734,13 @@ local function update_recover(with_diff)
   end
   if math.abs(cur_l - Q.rec_l) <= RAMP_EPS_PWM
     and math.abs(cur_r - Q.rec_r) <= RAMP_EPS_PWM then
-    Q.phase = Q.VTOL
-    gcs:send_text(6, 'BTILT: qrecover done')
+    local wait = Q.rel_at
+    if not wait or now_ms() >= wait then
+      Q.phase = Q.VTOL
+      Q.fw_since = nil
+      Q.rel_at = nil
+      gcs:send_text(6, 'BTILT: qrecover done')
+    end
   end
 end
 
@@ -733,6 +773,12 @@ end
 local function enter_fw_now(desired, recapture)
   Q.phase = Q.FW
   was_fw = true
+  -- Firmware current_tilt starts forward only once the mode is FW.
+  -- Leave an existing stamp so a recover that was switched back to FW
+  -- still counts as a full forward angle on the next return.
+  if not Q.fw_since then
+    Q.fw_since = now_ms()
+  end
   ensure_mode(desired)
   update_tilt(recapture, true)
   update_motors()
@@ -742,6 +788,7 @@ local function finish_qhold(desired)
   sample_motors_for_blend()
   Q.phase = Q.FW
   was_fw = true
+  Q.fw_since = now_ms()
   gcs:send_text(6, 'BTILT: qhold done')
   ensure_mode(desired)
   -- Common-mode output was already written this tick. Differential

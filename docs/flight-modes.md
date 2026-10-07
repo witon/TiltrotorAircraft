@@ -97,11 +97,11 @@ flowchart LR
 | 操作 | 是否触发形态过渡 |
 |------|------------------|
 | 形态开关：垂起 → 固飞 | **是**。模式先保持 `QSTABILIZE`，倾转共模扫过 `BTILT_QFRAC` 后才进入当时开关所选的 `STABILIZE` 或 `MANUAL` |
-| 形态开关：固飞 → 垂起 | **是**。还在离水平 `(1-BTILT_QFRAC)` 以内时留在当时的固飞模式（油门直通、倾转差动、推力差动）；左右都走出这段才进 `QSTABILIZE`，电机交回混控，倾转由 Lua 扫回垂起角后才松开 |
+| 形态开关：固飞 → 垂起 | **是**。还在离水平 `(1-BTILT_QFRAC)` 以内时留在当时的固飞模式（油门直通、倾转差动、推力差动）；左右都走出这段才进 `QSTABILIZE`，电机交回混控，倾转由 Lua 扫回垂起角，并等到固件内部倾转角扫完才松开 |
 | 固飞模式开关：自稳 ↔ 纯手动 | **否**（不重新扫倾转）。保持期间只决定过阈值后进入哪个固飞模式；已经在固飞后立即切换 |
 
 - **垂起 → 固飞**：形态开关切固飞后，飞控模式仍是 `QSTABILIZE`，三电机仍由垂起混控。Lua 只把左右倾转从当前位置共模扫向 `BTILT_HORIZ_*`（`Q_TILT_RATE_DN`）。固件把 vectored yaw 叠在这个共模中心上，随前倾角按 cos 衰减；靠近水平（衰减低于 0.05）时差动为 0，并清掉偏航目标、角速度和 I。这段没有固飞横滚差动。左右较慢的一侧都走过行程的 `BTILT_QFRAC`（默认 0.7）之后，才 `set_mode` 到开关所选的固飞模式，电机约 300 ms 从混控油门收到固飞目标（前电机跟油门杆，尾电机停转），剩余倾转继续扫完并开始差动。见 [hardware.md](./hardware.md) 倾转端点语义。
-- **固飞 → 垂起**：形态开关切垂起后，若倾转还在离水平 `(1-BTILT_QFRAC)` 以内（默认 0.7，约 27°），模式保持原来的 `STABILIZE` 或 `MANUAL`，GCS 见 `BTILT: qback`。前电机仍跟油门杆和偏航差动，尾电机停转；倾转中心按 `Q_TILT_RATE_UP` 扫向进入过渡前的垂起角，并继续叠加横滚差动。左右较慢的一侧都走出这段后才 `set_mode(QSTABILIZE)`，GCS 见 `BTILT: qrecover`，固飞电机覆写停止。倾转改为共模扫回，固件继续在共模中心上叠加衰减后的 vectored yaw，到位松开（`BTILT: qrecover done`）时不应再多跳一截。倾转不交给固件硬切：固件固飞角在真水平以下（更朝前），松手会先猛地向下一截再收回。这段里再拨回固飞，按现有 qhold 重新朝水平扫。见 [ardupilot-setup.md](./ardupilot-setup.md) §3 / §4。
+- **固飞 → 垂起**：形态开关切垂起后，若倾转还在离水平 `(1-BTILT_QFRAC)` 以内（默认 0.7，约 27°），模式保持原来的 `STABILIZE` 或 `MANUAL`，GCS 见 `BTILT: qback`。前电机仍跟油门杆和偏航差动，尾电机停转；倾转中心按 `Q_TILT_RATE_UP` 扫向进入过渡前的垂起角，并继续叠加横滚差动。左右较慢的一侧都走出这段后才 `set_mode(QSTABILIZE)`，GCS 见 `BTILT: qrecover`，固飞电机覆写停止。倾转改为共模扫回，固件继续在共模中心上叠加衰减后的 vectored yaw。舵机先到垂起角后仍握住，等固件从进入 `QSTABILIZE` 起把内部倾转角扫完才出现 `BTILT: qrecover done`。舵机一到位就松的话，内部角还朝前，会先被拉前再按 `Q_TILT_RATE_UP` 收回。这段里再拨回固飞，按现有 qhold 重新朝水平扫。见 [ardupilot-setup.md](./ardupilot-setup.md) §3 / §4。
 - `BTILT_QFRAC=0` 取消这两段角度保持（拨固飞后立刻进入目标模式，拨垂起后立刻把电机交回混控）。回程倾转仍由 Lua 扫回，避免朝前跳一截。不能用它代替把 `FLTMODE_CH` 设回 8。
 
 倾转与各轴控制的设计意图、实机形态 / 差动滚转图示、以及固飞 Lua 差动倾转约定，见 [hardware.md](./hardware.md)；刷参与脚本部署见 [ardupilot-setup.md](./ardupilot-setup.md)。本文只定模式与开关体系。
